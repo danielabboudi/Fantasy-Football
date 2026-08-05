@@ -1,0 +1,642 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BirdBrain — Auction Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Brand Design System v1.3 — DARK VARIANT (derived)
+   v1.3 is light-only but notes a dark variant can be derived from
+   the same tokens. Rules applied:
+   1. CANVAS INVERTS, cool-neutral hues preserved (never warm black).
+   2. SLATE STAYS THE WORKHORSE BUT FLIPS. Slate is defined by its JOB
+      — "everything that does work" — which it does by carrying max
+      contrast against the canvas: dark on light, therefore light on
+      dark. Primary buttons take dark text via --on-slate. slate-tint
+      (chips) inverts the other way, to a dark fill.
+   3. PURPLE LIFTS #6938EF -> #8F6BFF (too dark to read on a dark
+      canvas) and stays scarce — never a working colour.
+   4. AMBER lifts; its background becomes a dark tint.
+   5. SHADOWS DEEPEN; elevation reads via shadow + hairline border.
+   6. CATEGORICAL colours lift ~15%, hue order preserved.
+
+   TABLET EXTENSION (also derived — v1.3 is mobile-first only):
+   the 440px cap is a READABILITY measure for a column, not an app
+   width. On >=820px we keep the same column measure and place two of
+   them side by side, so type size, spacing, radii and density are
+   untouched; only the number of columns changes. Bottom nav is a
+   thumb-reach pattern, so on wide screens it is replaced by a top tab
+   row and the board stays permanently visible beside the side pane.
+   ============================================================ */
+:root{
+  --ink:#ECEEF2; --graphite:#B4BAC4; --muted:#868D98;
+  --border:#262A32; --surface:#0E1014; --white:#171A20; --raised:#1D2128;
+  --slate:#DFE3EA; --slate-hover:#FFFFFF; --slate-mid:#7C8595;
+  --slate-tint:#232830; --on-slate:#12141A;
+  --accent:#8F6BFF; --accent-tint:#1E1730;
+  --amber-t:#E3A94A; --amber-bg:#2A2114;
+  --pos-t:#4FBFA0; --neg-t:#E07B7B;
+  --cat-1:#7C8AE0; --cat-2:#E88585; --cat-3:#EBB761;
+  --cat-4:#47B8A5; --cat-5:#74C0E8; --cat-6:#A98BC9;
+  --r-lg:14px; --r-md:11px; --r-sm:8px; --r-pill:999px;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 6px 18px rgba(0,0,0,.38);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--surface);color:var(--ink);
+  line-height:1.45;-webkit-font-smoothing:antialiased;font-size:13px;padding:16px 14px 92px}
+.wrap{max-width:440px;margin:0 auto}
+.slash{width:5px;height:17px;border-radius:99px;background:var(--accent);transform:rotate(18deg);flex:0 0 auto}
+.mark{display:inline-grid;place-items:center}.mark svg{width:100%;height:100%}
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:15px;box-shadow:var(--shadow);margin-bottom:13px}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+.head-l{display:flex;align-items:center;gap:11px}
+.card-head h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--graphite)}
+.count{font-size:11px;font-weight:700;color:var(--slate);background:var(--slate-tint);padding:2px 9px;border-radius:var(--r-pill)}
+.badge{font-size:10.5px;font-weight:600;padding:3px 10px;border-radius:var(--r-pill);white-space:nowrap}
+.badge.open{color:var(--slate);background:var(--slate-tint)}
+.badge.waiting{color:var(--amber-t);background:var(--amber-bg)}
+.badge.man{color:var(--accent);background:var(--accent-tint)}
+.btn{font-family:inherit;font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:var(--r-sm);
+  cursor:pointer;border:1px solid transparent}
+.btn-primary{background:var(--slate);color:var(--on-slate)}
+.btn-primary:active{background:var(--slate-hover)}
+.btn-ghost{background:transparent;color:var(--ink);border-color:var(--border)}
+.btn-sm{padding:7px 11px;font-size:12px}
+.track{height:6px;background:var(--surface);border-radius:var(--r-pill);overflow:hidden;border:1px solid var(--border)}
+.fill{height:100%;background:var(--slate);border-radius:var(--r-pill);transition:width .25s ease}
+.watch{display:flex;gap:10px;align-items:flex-start;background:var(--slate-tint);border-radius:var(--r-md);
+  padding:11px 13px;margin-top:8px}
+.watch:first-child{margin-top:0}
+.watch-dot{width:8px;height:8px;border-radius:var(--r-pill);background:var(--amber-t);flex:0 0 auto;margin-top:5px}
+.watch-text{font-size:12.5px;font-weight:600;color:var(--ink)}
+.watch-text small{display:block;font-weight:500;color:var(--muted);font-size:11px}
+
+header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:12px}
+h1{display:flex;align-items:center;gap:7px;font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--accent)}
+h1 span.t{color:var(--ink)}
+.sub{font-size:11px;color:var(--muted);font-weight:500;margin-top:2px}
+.syncbox{text-align:right;flex:0 0 auto}
+.syncstat{font-size:10.5px;color:var(--muted);font-weight:600;margin-top:4px}
+.syncstat b{color:var(--pos-t)} .syncstat i{color:var(--neg-t);font-style:normal}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:11px}
+.stat{background:var(--raised);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 7px;text-align:center}
+.stat .v{font-size:15px;font-weight:800;letter-spacing:-.02em}
+.stat .k{font-size:9.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
+
+.chips{display:flex;gap:6px;margin-bottom:9px;flex-wrap:wrap}
+.chip{font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:var(--r-pill);cursor:pointer;
+  background:var(--slate-tint);color:var(--muted);border:1px solid transparent;user-select:none}
+.chip.on{background:var(--slate);color:var(--on-slate)}
+.chip.alt.on{background:var(--slate-mid);color:var(--on-slate)}
+input,select{font-family:inherit;font-size:13px;font-weight:500;padding:10px 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--ink);width:100%}
+input::placeholder{color:var(--muted)}
+label.f{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);margin:0 0 4px 2px}
+.frow{display:grid;gap:9px;margin-bottom:10px}
+
+.row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.row:last-child{border-bottom:none}
+.row.gone{opacity:.36}
+.row.mine{background:linear-gradient(90deg,var(--accent-tint),transparent);border-radius:var(--r-sm);padding-left:8px}
+.rk{font-size:10.5px;font-weight:700;color:var(--muted);width:22px;flex:0 0 auto;text-align:right}
+.who{flex:1;min-width:0}
+.nm{font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mt{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv{text-align:right;flex:0 0 auto}
+.pv .ours{font-size:13.5px;font-weight:800;letter-spacing:-.02em}
+.pv .mkt{font-size:10.5px;color:var(--muted);margin-top:1px}
+.sur{font-size:11px;font-weight:700;width:44px;text-align:right;flex:0 0 auto}
+.sur.p{color:var(--pos-t)} .sur.n{color:var(--neg-t)}
+.sale{display:none;gap:6px;padding:9px 0 11px;align-items:center;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.sale.on{display:flex}
+.sale input{width:78px}
+.sale select{width:auto;min-width:132px;flex:1}
+.sale .rec{font-size:11px;color:var(--muted);font-weight:600;width:100%;line-height:1.3}
+.sale .rec b{color:var(--ink);font-size:12.5px}
+
+.trow{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--border)}
+.trow:last-child{border-bottom:none}
+.trow.me{background:linear-gradient(90deg,var(--accent-tint),transparent);border-radius:var(--r-sm);padding-left:8px}
+.tname{flex:1;min-width:0;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tneed{font-size:10.5px;color:var(--muted);font-weight:600;margin-top:1px}
+.tmoney{text-align:right;flex:0 0 auto;font-size:13px;font-weight:800;letter-spacing:-.02em}
+.tmoney small{display:block;font-size:10px;font-weight:600;color:var(--muted);letter-spacing:0}
+
+.posrow{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--border)}
+.posrow:last-child{border-bottom:none}
+.empty{font-size:12px;color:var(--muted);padding:14px 0;text-align:center}
+.legend{font-size:10.5px;color:var(--muted);margin-top:9px;line-height:1.5}
+
+nav.bottom-nav{position:fixed;left:0;right:0;bottom:0;background:var(--white);border-top:1px solid var(--border);
+  box-shadow:0 -2px 14px rgba(0,0,0,.5);padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
+nav.bottom-nav .row2{display:grid;grid-template-columns:repeat(4,1fr);height:60px;max-width:440px;margin:0 auto}
+nav.bottom-nav button{appearance:none;background:transparent;border:none;cursor:pointer;font-family:inherit;
+  font-weight:600;font-size:10.5px;letter-spacing:.02em;color:var(--muted);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:3px;padding:6px 2px;position:relative;transition:color .15s ease}
+nav.bottom-nav button.active{color:var(--slate)}
+nav.bottom-nav button.active::before{content:'';position:absolute;top:0;left:30%;right:30%;height:3px;
+  background:var(--slate);border-radius:0 0 3px 3px}
+.nav-ic{width:18px;height:18px;display:inline-grid;place-items:center}
+.nav-ic svg{width:100%;height:100%;display:block;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.nav-ic svg.solid{fill:currentColor;stroke:none}
+.toptabs{display:none;gap:7px;margin-bottom:13px}
+.pane{display:none}.pane.on{display:block}
+
+/* ---- Tablet / desktop: two columns of the same 440 measure ---- */
+@media (min-width:820px){
+  body{padding:22px 22px 30px}
+  .wrap{max-width:1140px}
+  .app{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
+  .side{position:sticky;top:22px}
+  nav.bottom-nav{display:none}
+  .toptabs{display:flex}
+  .stats{grid-template-columns:repeat(4,1fr)}
+  .sale input{width:92px}
+  .row{padding:10px 0}
+  .nm{font-size:13.5px}
+}
+@media (min-width:1180px){ .wrap{max-width:1240px} }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span class="t">BirdBrain</span>
+        <span class="mark" style="width:14px;height:14px">
+          <svg viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="19" rx="3" transform="rotate(18 12 12)" fill="currentColor"/></svg>
+        </span>
+      </h1>
+      <div class="sub" id="subline"></div>
+    </div>
+    <div class="syncbox">
+      <button class="btn btn-ghost btn-sm" id="syncbtn">Sync</button>
+      <div class="syncstat" id="syncstat">manual only</div>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><div class="v" id="s-budget">$200</div><div class="k">Budget</div></div>
+    <div class="stat"><div class="v" id="s-slots">13</div><div class="k">Slots</div></div>
+    <div class="stat"><div class="v" id="s-max">$188</div><div class="k">Max bid</div></div>
+    <div class="stat"><div class="v" id="s-infl">1.00×</div><div class="k">Inflation</div></div>
+  </div>
+  <div class="track" style="margin-bottom:13px"><div class="fill" id="spendbar" style="width:0%"></div></div>
+  <div id="warnwrap"></div>
+
+  <div class="toptabs" id="toptabs"></div>
+
+  <div class="app">
+    <div class="main">
+      <section class="pane on" id="pane-board">
+        <div class="card">
+          <div class="card-head">
+            <div class="head-l"><span class="slash"></span><h2>Draft Board</h2></div>
+            <span class="count" id="c-board">—</span>
+          </div>
+          <input id="q" placeholder="Search player…" autocomplete="off" style="margin-bottom:9px">
+          <div class="chips" id="chips"></div>
+          <div class="chips" id="sorts"></div>
+          <div id="board"></div>
+          <div class="legend">Bold = our value · below = market price · right = surplus.
+            Tap a row to record a sale. <b>Buys</b> sorts by value over market;
+            <b>Fade</b> inverts it — those are your nomination candidates.</div>
+        </div>
+      </section>
+    </div>
+
+    <div class="side">
+      <section class="pane" id="pane-room">
+        <div class="card">
+          <div class="card-head">
+            <div class="head-l"><span class="slash"></span><h2>The Room</h2></div>
+            <span class="count" id="c-room">18 teams</span>
+          </div>
+          <div id="room"></div>
+          <div class="legend">Left = money remaining · below = max legal bid.
+            Needs are minimum viable roster, not preference. Deterministic only —
+            who <i>can</i> bid, never a guess at who <i>will</i>.</div>
+        </div>
+      </section>
+
+      <section class="pane" id="pane-team">
+        <div class="card">
+          <div class="card-head">
+            <div class="head-l"><span class="slash"></span><h2>My Roster</h2></div>
+            <span class="count" id="c-team">0</span>
+          </div>
+          <div id="roster"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="head-l"><h2>Spend by position</h2></div></div>
+          <div id="spend"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="head-l"><h2>Opening plan</h2></div></div>
+          <div id="plan"></div>
+        </div>
+      </section>
+
+      <section class="pane" id="pane-add">
+        <div class="card">
+          <div class="card-head">
+            <div class="head-l"><span class="slash"></span><h2>Record a sale</h2></div>
+            <span class="count">manual</span>
+          </div>
+          <div class="frow">
+            <div><label class="f">Player</label>
+              <input id="m-name" list="playerlist" placeholder="Type any name — on the board or not" autocomplete="off">
+              <datalist id="playerlist"></datalist></div>
+          </div>
+          <div class="frow" style="grid-template-columns:1fr 1fr">
+            <div><label class="f">Position</label>
+              <select id="m-pos"><option>QB</option><option>RB</option><option>WR</option>
+                <option>TE</option><option>K</option><option>DEF</option></select></div>
+            <div><label class="f">Price</label>
+              <input id="m-price" type="number" inputmode="decimal" placeholder="$"></div>
+          </div>
+          <div class="frow">
+            <div><label class="f">Won by</label><select id="m-team"></select></div>
+          </div>
+          <button class="btn btn-primary" id="m-add" style="width:100%">Record sale</button>
+          <div class="legend">Manual entries are <b>law</b> — a Sleeper sync will never
+            overwrite or delete one. Use this for anything the sync misses, gets wrong,
+            or for players not on our board at all.</div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div class="head-l"><h2>Manual entries</h2></div>
+            <span class="count" id="c-man">0</span>
+          </div>
+          <div id="manlist"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="row2">
+    <button class="active" data-p="board">
+      <span class="nav-ic"><svg viewBox="0 0 24 24" class="solid"><rect x="9" y="2.5" width="6" height="19" rx="3" transform="rotate(18 12 12)"/></svg></span>
+      <span>Board</span></button>
+    <button data-p="room">
+      <span class="nav-ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 4v16M4 12h16"/></svg></span>
+      <span>Room</span></button>
+    <button data-p="team">
+      <span class="nav-ic"><svg viewBox="0 0 24 24"><path d="M4 7h12M4 12h16M4 17h9"/></svg></span>
+      <span>Team</span></button>
+    <button data-p="add">
+      <span class="nav-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8.5v7M8.5 12h7"/></svg></span>
+      <span>Add</span></button>
+  </div>
+</nav>
+
+<script>
+const P = {"league":{"name":"The Other Roemer League","team_name":"BirdBrain","teams":18,"budget":200,"roster_size":13,"my_roster_id":16,"draft_id":"1386927404361981952","league_id":"1386927403019816960","dedicated":{"QB":1,"RB":2,"WR":2,"TE":1}},"rosters":[{"roster_id":1,"name":"bwaldstreicher","me":false},{"roster_id":2,"name":"levine91","me":false},{"roster_id":3,"name":"isaacw","me":false},{"roster_id":4,"name":"kelsbells28","me":false},{"roster_id":5,"name":"neetknack","me":false},{"roster_id":6,"name":"happiestofchappys","me":false},{"roster_id":7,"name":"simmiesimmie","me":false},{"roster_id":8,"name":"jdlevine","me":false},{"roster_id":9,"name":"Winfield of Dreams","me":false},{"roster_id":10,"name":"avolk","me":false},{"roster_id":11,"name":"Ahoenig85","me":false},{"roster_id":12,"name":"dafein","me":false},{"roster_id":13,"name":"DSecemski56","me":false},{"roster_id":14,"name":"jshap93","me":false},{"roster_id":15,"name":"FootyMcFootball","me":false},{"roster_id":16,"name":"BirdBrain","me":true},{"roster_id":17,"name":"OnlyFins","me":false},{"roster_id":18,"name":"Mr. Poopy Butthole","me":false}],"players":[{"name":"Bijan Robinson","pos":"RB","team":"ATL","tier":1,"bye":11,"value":64.2,"price":76.9,"surplus":-12.7,"proj":360.3,"rostered":true},{"name":"Puka Nacua","pos":"WR","team":"LAR","tier":1,"bye":11,"value":62.8,"price":62.1,"surplus":0.7,"proj":352.8,"rostered":true},{"name":"Jahmyr Gibbs","pos":"RB","team":"DET","tier":1,"bye":6,"value":57.9,"price":74.9,"surplus":-17.0,"proj":338.8,"rostered":true},{"name":"Josh Allen","pos":"QB","team":"BUF","tier":1,"bye":7,"value":57.8,"price":81.1,"surplus":-23.3,"proj":346.7,"rostered":true},{"name":"Jaxon Smith-Njigba","pos":"WR","team":"SEA","tier":1,"bye":11,"value":56.2,"price":60.4,"surplus":-4.2,"proj":330.0,"rostered":true},{"name":"Drake Maye","pos":"QB","team":"NEP","tier":1,"bye":11,"value":56.1,"price":70.8,"surplus":-14.7,"proj":340.8,"rostered":true},{"name":"Ja'Marr Chase","pos":"WR","team":"CIN","tier":1,"bye":6,"value":56.1,"price":75.8,"surplus":-19.7,"proj":329.5,"rostered":true},{"name":"Christian McCaffrey","pos":"RB","team":"SFO","tier":1,"bye":8,"value":55.9,"price":50.9,"surplus":5.0,"proj":331.7,"rostered":true},{"name":"Lamar Jackson","pos":"QB","team":"BAL","tier":2,"bye":13,"value":50.0,"price":72.9,"surplus":-22.9,"proj":319.7,"rostered":true},{"name":"Jalen Hurts","pos":"QB","team":"PHI","tier":2,"bye":10,"value":49.0,"price":54.4,"surplus":-5.4,"proj":316.5,"rostered":true},{"name":"Amon-Ra St. Brown","pos":"WR","team":"DET","tier":1,"bye":6,"value":48.8,"price":58.7,"surplus":-9.9,"proj":304.3,"rostered":true},{"name":"CeeDee Lamb","pos":"WR","team":"DAL","tier":1,"bye":14,"value":47.4,"price":52.5,"surplus":-5.1,"proj":299.4,"rostered":true},{"name":"Dak Prescott","pos":"QB","team":"DAL","tier":3,"bye":14,"value":46.6,"price":48.0,"surplus":-1.4,"proj":308.0,"rostered":true},{"name":"Jayden Daniels","pos":"QB","team":"WAS","tier":3,"bye":7,"value":45.6,"price":64.4,"surplus":-18.8,"proj":304.7,"rostered":true},{"name":"Joe Burrow","pos":"QB","team":"CIN","tier":3,"bye":6,"value":44.6,"price":70.2,"surplus":-25.6,"proj":301.1,"rostered":true},{"name":"Bo Nix","pos":"QB","team":"DEN","tier":3,"bye":10,"value":44.1,"price":46.0,"surplus":-1.9,"proj":299.3,"rostered":true},{"name":"Brock Purdy","pos":"QB","team":"SFO","tier":3,"bye":8,"value":44.1,"price":42.1,"surplus":2.0,"proj":299.3,"rostered":true},{"name":"Caleb Williams","pos":"QB","team":"CHI","tier":3,"bye":10,"value":43.6,"price":60.7,"surplus":-17.1,"proj":297.7,"rostered":true},{"name":"Matthew Stafford","pos":"QB","team":"LAR","tier":3,"bye":11,"value":43.0,"price":35.4,"surplus":7.6,"proj":295.5,"rostered":true},{"name":"Jonathan Taylor","pos":"RB","team":"IND","tier":2,"bye":13,"value":42.5,"price":51.9,"surplus":-9.4,"proj":285.4,"rostered":true},{"name":"Patrick Mahomes","pos":"QB","team":"KCC","tier":3,"bye":5,"value":42.2,"price":61.0,"surplus":-18.8,"proj":292.7,"rostered":true},{"name":"Justin Herbert","pos":"QB","team":"LAC","tier":3,"bye":7,"value":42.0,"price":59.0,"surplus":-17.0,"proj":292.2,"rostered":true},{"name":"Trevor Lawrence","pos":"QB","team":"JAC","tier":3,"bye":7,"value":41.5,"price":50.4,"surplus":-8.9,"proj":290.3,"rostered":true},{"name":"Jaxson Dart","pos":"QB","team":"NYG","tier":3,"bye":8,"value":40.9,"price":41.0,"surplus":-0.1,"proj":288.4,"rostered":true},{"name":"Baker Mayfield","pos":"QB","team":"TBB","tier":3,"bye":10,"value":40.1,"price":33.4,"surplus":6.7,"proj":285.6,"rostered":true},{"name":"Justin Jefferson","pos":"WR","team":"MIN","tier":2,"bye":6,"value":39.5,"price":54.6,"surplus":-15.1,"proj":272.1,"rostered":true},{"name":"De'Von Achane","pos":"RB","team":"MIA","tier":2,"bye":6,"value":39.2,"price":46.1,"surplus":-6.9,"proj":273.9,"rostered":true},{"name":"Tyler Shough","pos":"QB","team":"NOS","tier":4,"bye":8,"value":38.4,"price":26.8,"surplus":11.6,"proj":279.7,"rostered":true},{"name":"Chase Brown","pos":"RB","team":"CIN","tier":2,"bye":6,"value":38.2,"price":35.1,"surplus":3.1,"proj":270.5,"rostered":true},{"name":"Ashton Jeanty","pos":"RB","team":"LVR","tier":2,"bye":13,"value":38.1,"price":48.5,"surplus":-10.4,"proj":270.3,"rostered":true},{"name":"Jared Goff","pos":"QB","team":"DET","tier":4,"bye":6,"value":37.6,"price":36.9,"surplus":0.7,"proj":276.9,"rostered":true},{"name":"Rashee Rice","pos":"WR","team":"KCC","tier":2,"bye":5,"value":36.9,"price":24.0,"surplus":12.9,"proj":263.2,"rostered":true},{"name":"Saquon Barkley","pos":"RB","team":"PHI","tier":2,"bye":10,"value":36.3,"price":39.7,"surplus":-3.4,"proj":264.2,"rostered":true},{"name":"Jordan Love","pos":"QB","team":"GBP","tier":4,"bye":11,"value":36.1,"price":38.1,"surplus":-2.0,"proj":271.8,"rostered":true},{"name":"Drake London","pos":"WR","team":"ATL","tier":2,"bye":11,"value":36.1,"price":38.4,"surplus":-2.3,"proj":260.4,"rostered":true},{"name":"James Cook","pos":"RB","team":"BUF","tier":2,"bye":7,"value":36.0,"price":48.8,"surplus":-12.8,"proj":263.1,"rostered":true},{"name":"Trey McBride","pos":"TE","team":"ARI","tier":1,"bye":14,"value":36.0,"price":52.5,"surplus":-16.5,"proj":260.1,"rostered":true},{"name":"Kyler Murray","pos":"QB","team":"MIN","tier":4,"bye":6,"value":35.5,"price":22.0,"surplus":13.5,"proj":269.7,"rostered":true},{"name":"Jeremiyah Love","pos":"RB","team":"ARI","tier":2,"bye":14,"value":34.8,"price":39.1,"surplus":-4.3,"proj":259.0,"rostered":true},{"name":"Nico Collins","pos":"WR","team":"HOU","tier":2,"bye":8,"value":34.7,"price":32.5,"surplus":2.2,"proj":255.7,"rostered":true},{"name":"Kenneth Walker III","pos":"RB","team":"KCC","tier":2,"bye":5,"value":34.7,"price":35.9,"surplus":-1.2,"proj":258.6,"rostered":true},{"name":"Omarion Hampton","pos":"RB","team":"LAC","tier":2,"bye":7,"value":34.4,"price":45.7,"surplus":-11.3,"proj":257.4,"rostered":true},{"name":"Derrick Henry","pos":"RB","team":"BAL","tier":2,"bye":13,"value":34.3,"price":35.8,"surplus":-1.5,"proj":257.3,"rostered":true},{"name":"Breece Hall","pos":"RB","team":"NYJ","tier":2,"bye":13,"value":33.9,"price":27.2,"surplus":6.7,"proj":255.7,"rostered":true},{"name":"Malik Willis","pos":"QB","team":"MIA","tier":4,"bye":6,"value":33.5,"price":11.5,"surplus":22.0,"proj":262.9,"rostered":true},{"name":"Sam Darnold","pos":"QB","team":"SEA","tier":4,"bye":11,"value":32.8,"price":21.1,"surplus":11.7,"proj":260.5,"rostered":true},{"name":"Chris Olave","pos":"WR","team":"NOS","tier":3,"bye":8,"value":32.5,"price":24.3,"surplus":8.2,"proj":247.8,"rostered":true},{"name":"Brock Bowers","pos":"TE","team":"LVR","tier":1,"bye":13,"value":32.4,"price":49.0,"surplus":-16.6,"proj":247.7,"rostered":true},{"name":"Garrett Wilson","pos":"WR","team":"NYJ","tier":3,"bye":13,"value":32.4,"price":25.1,"surplus":7.3,"proj":247.7,"rostered":true},{"name":"A.J. Brown","pos":"WR","team":"NEP","tier":3,"bye":11,"value":32.4,"price":31.1,"surplus":1.3,"proj":247.5,"rostered":true},{"name":"Zay Flowers","pos":"WR","team":"BAL","tier":3,"bye":13,"value":32.0,"price":19.4,"surplus":12.6,"proj":246.1,"rostered":true},{"name":"Kyren Williams","pos":"RB","team":"LAR","tier":3,"bye":11,"value":31.6,"price":22.1,"surplus":9.5,"proj":247.9,"rostered":true},{"name":"Daniel Jones","pos":"QB","team":"IND","tier":4,"bye":13,"value":31.5,"price":16.2,"surplus":15.3,"proj":256.0,"rostered":true},{"name":"George Pickens","pos":"WR","team":"DAL","tier":3,"bye":14,"value":31.4,"price":30.1,"surplus":1.3,"proj":244.3,"rostered":true},{"name":"C.J. Stroud","pos":"QB","team":"HOU","tier":4,"bye":8,"value":30.8,"price":22.0,"surplus":8.8,"proj":253.4,"rostered":true},{"name":"Javonte Williams","pos":"RB","team":"DAL","tier":3,"bye":14,"value":30.7,"price":20.0,"surplus":10.7,"proj":244.6,"rostered":true},{"name":"Josh Jacobs","pos":"RB","team":"GBP","tier":3,"bye":11,"value":30.3,"price":22.2,"surplus":8.1,"proj":243.3,"rostered":true},{"name":"DeVonta Smith","pos":"WR","team":"PHI","tier":4,"bye":10,"value":29.6,"price":25.8,"surplus":3.8,"proj":238.0,"rostered":true},{"name":"Cam Ward","pos":"QB","team":"TEN","tier":4,"bye":9,"value":27.6,"price":27.9,"surplus":-0.3,"proj":242.4,"rostered":true},{"name":"Cam Skattebo","pos":"RB","team":"NYG","tier":4,"bye":8,"value":26.8,"price":20.5,"surplus":6.3,"proj":231.4,"rostered":true},{"name":"Malik Nabers","pos":"WR","team":"NYG","tier":5,"bye":8,"value":25.6,"price":39.3,"surplus":-13.7,"proj":224.2,"rostered":true},{"name":"Travis Etienne","pos":"RB","team":"NOS","tier":4,"bye":8,"value":25.1,"price":17.5,"surplus":7.6,"proj":225.6,"rostered":true},{"name":"Geno Smith","pos":"QB","team":"NYJ","tier":5,"bye":13,"value":25.0,"price":8.5,"surplus":16.5,"proj":233.6,"rostered":true},{"name":"Tyler Warren","pos":"TE","team":"IND","tier":2,"bye":13,"value":24.9,"price":24.7,"surplus":0.2,"proj":221.7,"rostered":true},{"name":"Emeka Egbuka","pos":"WR","team":"TBB","tier":5,"bye":10,"value":24.9,"price":26.8,"surplus":-1.9,"proj":221.6,"rostered":true},{"name":"Bryce Young","pos":"QB","team":"CAR","tier":5,"bye":5,"value":24.6,"price":15.5,"surplus":9.1,"proj":232.0,"rostered":true},{"name":"Davante Adams","pos":"WR","team":"LAR","tier":5,"bye":11,"value":24.2,"price":17.8,"surplus":6.4,"proj":219.4,"rostered":true},{"name":"Bucky Irving","pos":"RB","team":"TBB","tier":4,"bye":10,"value":24.1,"price":16.0,"surplus":8.1,"proj":221.8,"rostered":true},{"name":"Tetairoa McMillan","pos":"WR","team":"CAR","tier":5,"bye":5,"value":23.7,"price":23.8,"surplus":-0.1,"proj":217.5,"rostered":true},{"name":"D'Andre Swift","pos":"RB","team":"CHI","tier":4,"bye":10,"value":23.5,"price":13.3,"surplus":10.2,"proj":220.0,"rostered":true},{"name":"Terry McLaurin","pos":"WR","team":"WAS","tier":5,"bye":7,"value":22.8,"price":14.1,"surplus":8.7,"proj":214.5,"rostered":true},{"name":"Ladd McConkey","pos":"WR","team":"LAC","tier":5,"bye":7,"value":22.4,"price":21.1,"surplus":1.3,"proj":213.0,"rostered":true},{"name":"Jaylen Waddle","pos":"WR","team":"DEN","tier":5,"bye":10,"value":22.2,"price":21.5,"surplus":0.7,"proj":212.4,"rostered":true},{"name":"Tee Higgins","pos":"WR","team":"CIN","tier":5,"bye":6,"value":22.1,"price":22.2,"surplus":-0.1,"proj":212.1,"rostered":true},{"name":"Jacoby Brissett","pos":"QB","team":"ARI","tier":5,"bye":14,"value":21.7,"price":7.9,"surplus":13.8,"proj":221.9,"rostered":true},{"name":"Aaron Rodgers","pos":"QB","team":"PIT","tier":5,"bye":9,"value":21.5,"price":12.2,"surplus":9.3,"proj":221.2,"rostered":true},{"name":"Quinshon Judkins","pos":"RB","team":"CLE","tier":4,"bye":11,"value":21.2,"price":18.6,"surplus":2.6,"proj":212.0,"rostered":true},{"name":"Colston Loveland","pos":"TE","team":"CHI","tier":2,"bye":10,"value":20.1,"price":22.4,"surplus":-2.3,"proj":205.1,"rostered":true},{"name":"Luther Burden","pos":"WR","team":"CHI","tier":6,"bye":10,"value":20.0,"price":12.4,"surplus":7.6,"proj":204.9,"rostered":true},{"name":"Jameson Williams","pos":"WR","team":"DET","tier":6,"bye":6,"value":19.7,"price":11.0,"surplus":8.7,"proj":203.9,"rostered":true},{"name":"Bhayshul Tuten","pos":"RB","team":"JAC","tier":4,"bye":7,"value":19.2,"price":8.5,"surplus":10.7,"proj":205.1,"rostered":true},{"name":"Rome Odunze","pos":"WR","team":"CHI","tier":7,"bye":10,"value":18.2,"price":13.5,"surplus":4.7,"proj":198.5,"rostered":true},{"name":"DK Metcalf","pos":"WR","team":"PIT","tier":7,"bye":9,"value":17.9,"price":8.1,"surplus":9.8,"proj":197.6,"rostered":true},{"name":"Mike Evans","pos":"WR","team":"SFO","tier":7,"bye":8,"value":17.9,"price":15.5,"surplus":2.4,"proj":197.5,"rostered":true},{"name":"Harold Fannin","pos":"TE","team":"CLE","tier":2,"bye":11,"value":17.9,"price":8.8,"surplus":9.1,"proj":197.4,"rostered":true},{"name":"D.J. Moore","pos":"WR","team":"BUF","tier":7,"bye":7,"value":17.8,"price":11.5,"surplus":6.3,"proj":197.4,"rostered":true},{"name":"Alec Pierce","pos":"WR","team":"IND","tier":7,"bye":13,"value":17.2,"price":6.5,"surplus":10.7,"proj":195.1,"rostered":true},{"name":"Christian Watson","pos":"WR","team":"GBP","tier":7,"bye":11,"value":16.4,"price":9.6,"surplus":6.8,"proj":192.4,"rostered":true},{"name":"Courtland Sutton","pos":"WR","team":"DEN","tier":7,"bye":10,"value":16.1,"price":6.5,"surplus":9.6,"proj":191.2,"rostered":true},{"name":"David Montgomery","pos":"RB","team":"HOU","tier":5,"bye":8,"value":16.0,"price":15.6,"surplus":0.4,"proj":193.9,"rostered":true},{"name":"Sam LaPorta","pos":"TE","team":"DET","tier":2,"bye":6,"value":16.0,"price":15.3,"surplus":0.7,"proj":190.8,"rostered":true},{"name":"Jaylen Warren","pos":"RB","team":"PIT","tier":5,"bye":9,"value":15.7,"price":8.8,"surplus":6.9,"proj":192.7,"rostered":true},{"name":"Marvin Harrison Jr.","pos":"WR","team":"ARI","tier":7,"bye":null,"value":15.2,"price":11.5,"surplus":3.7,"proj":188.1,"rostered":true},{"name":"Tony Pollard","pos":"RB","team":"TEN","tier":5,"bye":9,"value":14.7,"price":6.5,"surplus":8.2,"proj":189.5,"rostered":true},{"name":"Josh Downs","pos":"WR","team":"IND","tier":7,"bye":13,"value":14.5,"price":4.8,"surplus":9.7,"proj":185.9,"rostered":true},{"name":"Chris Godwin","pos":"WR","team":"TBB","tier":7,"bye":10,"value":14.4,"price":6.7,"surplus":7.7,"proj":185.5,"rostered":true},{"name":"Carnell Tate","pos":"WR","team":"TEN","tier":7,"bye":9,"value":14.4,"price":17.0,"surplus":-2.6,"proj":185.3,"rostered":true},{"name":"Jakobi Meyers","pos":"WR","team":"JAC","tier":7,"bye":7,"value":14.2,"price":3.8,"surplus":10.4,"proj":184.8,"rostered":true},{"name":"Brian Thomas Jr.","pos":"WR","team":"JAC","tier":7,"bye":7,"value":14.2,"price":11.7,"surplus":2.5,"proj":184.6,"rostered":true},{"name":"Jadarian Price","pos":"RB","team":"SEA","tier":5,"bye":11,"value":13.7,"price":12.3,"surplus":1.4,"proj":186.0,"rostered":true},{"name":"Michael Pittman","pos":"WR","team":"PIT","tier":8,"bye":9,"value":12.8,"price":7.0,"surplus":5.8,"proj":179.8,"rostered":true},{"name":"TreVeyon Henderson","pos":"RB","team":"NEP","tier":5,"bye":11,"value":12.6,"price":21.7,"surplus":-9.1,"proj":182.3,"rostered":true},{"name":"Tucker Kraft","pos":"TE","team":"GBP","tier":2,"bye":11,"value":12.4,"price":19.6,"surplus":-7.2,"proj":178.4,"rostered":true},{"name":"Parker Washington","pos":"WR","team":"JAC","tier":9,"bye":7,"value":11.5,"price":6.0,"surplus":5.5,"proj":175.5,"rostered":true},{"name":"Kyle Pitts","pos":"TE","team":"ATL","tier":2,"bye":11,"value":11.4,"price":11.8,"surplus":-0.4,"proj":175.1,"rostered":true},{"name":"Travis Kelce","pos":"TE","team":"KCC","tier":2,"bye":5,"value":11.3,"price":10.1,"surplus":1.2,"proj":174.7,"rostered":true},{"name":"Wan'Dale Robinson","pos":"WR","team":"TEN","tier":9,"bye":9,"value":11.1,"price":3.8,"surplus":7.3,"proj":174.2,"rostered":true},{"name":"Jordyn Tyson","pos":"WR","team":"NOS","tier":9,"bye":8,"value":10.9,"price":10.6,"surplus":0.3,"proj":173.4,"rostered":true},{"name":"J.K. Dobbins","pos":"RB","team":"DEN","tier":5,"bye":10,"value":10.9,"price":6.1,"surplus":4.8,"proj":176.3,"rostered":true},{"name":"Chuba Hubbard","pos":"RB","team":"CAR","tier":5,"bye":5,"value":10.6,"price":7.7,"surplus":2.9,"proj":175.1,"rostered":true},{"name":"Khalil Shakir","pos":"WR","team":"BUF","tier":9,"bye":7,"value":9.7,"price":1.9,"surplus":7.8,"proj":169.2,"rostered":true},{"name":"Jordan Addison","pos":"WR","team":"MIN","tier":9,"bye":6,"value":9.5,"price":4.5,"surplus":5.0,"proj":168.6,"rostered":true},{"name":"Fernando Mendoza","pos":"QB","team":"LVR","tier":6,"bye":13,"value":9.5,"price":27.2,"surplus":-17.7,"proj":179.7,"rostered":true},{"name":"Mark Andrews","pos":"TE","team":"BAL","tier":3,"bye":13,"value":8.9,"price":5.7,"surplus":3.2,"proj":166.6,"rostered":true},{"name":"Rhamondre Stevenson","pos":"RB","team":"NEP","tier":5,"bye":11,"value":8.5,"price":7.6,"surplus":0.9,"proj":168.2,"rostered":true},{"name":"Matthew Golden","pos":"WR","team":"GBP","tier":9,"bye":11,"value":8.5,"price":2.5,"surplus":6.0,"proj":165.2,"rostered":true},{"name":"Jayden Reed","pos":"WR","team":"GBP","tier":9,"bye":11,"value":8.5,"price":3.8,"surplus":4.7,"proj":165.1,"rostered":true},{"name":"George Kittle","pos":"TE","team":"SFO","tier":3,"bye":8,"value":8.3,"price":15.8,"surplus":-7.5,"proj":164.4,"rostered":true},{"name":"Xavier Worthy","pos":"WR","team":"KCC","tier":9,"bye":5,"value":8.3,"price":2.0,"surplus":6.3,"proj":164.3,"rostered":true},{"name":"Isaiah Likely","pos":"TE","team":"NYG","tier":3,"bye":8,"value":8.2,"price":5.7,"surplus":2.5,"proj":163.9,"rostered":true},{"name":"Makai Lemon","pos":"WR","team":"PHI","tier":9,"bye":10,"value":8.1,"price":7.7,"surplus":0.4,"proj":163.6,"rostered":true},{"name":"Jake Ferguson","pos":"TE","team":"DAL","tier":3,"bye":14,"value":7.9,"price":5.6,"surplus":2.3,"proj":163.0,"rostered":true},{"name":"Dallas Goedert","pos":"TE","team":"PHI","tier":3,"bye":10,"value":7.0,"price":4.9,"surplus":2.1,"proj":159.9,"rostered":true},{"name":"Quentin Johnston","pos":"WR","team":"LAC","tier":9,"bye":7,"value":6.9,"price":3.5,"surplus":3.4,"proj":159.5,"rostered":true},{"name":"Michael Wilson","pos":"WR","team":"ARI","tier":9,"bye":14,"value":6.7,"price":7.0,"surplus":-0.3,"proj":158.9,"rostered":true},{"name":"Rico Dowdle","pos":"RB","team":"PIT","tier":6,"bye":9,"value":6.6,"price":7.6,"surplus":-1.0,"proj":161.6,"rostered":true},{"name":"Rachaad White","pos":"RB","team":"WAS","tier":6,"bye":7,"value":6.4,"price":4.7,"surplus":1.7,"proj":160.9,"rostered":true},{"name":"RJ Harvey","pos":"RB","team":"DEN","tier":6,"bye":10,"value":6.2,"price":6.1,"surplus":0.1,"proj":160.1,"rostered":true},{"name":"Dalton Kincaid","pos":"TE","team":"BUF","tier":3,"bye":7,"value":5.8,"price":4.9,"surplus":0.9,"proj":155.6,"rostered":true},{"name":"Kyle Monangai","pos":"RB","team":"CHI","tier":6,"bye":10,"value":5.4,"price":3.4,"surplus":2.0,"proj":157.2,"rostered":true},{"name":"Aaron Jones","pos":"RB","team":"MIN","tier":6,"bye":6,"value":5.3,"price":5.6,"surplus":-0.3,"proj":157.0,"rostered":true},{"name":"Romeo Doubs","pos":"WR","team":"NEP","tier":10,"bye":11,"value":5.2,"price":2.1,"surplus":3.1,"proj":153.7,"rostered":true},{"name":"Brenton Strange","pos":"TE","team":"JAC","tier":3,"bye":7,"value":5.2,"price":2.1,"surplus":3.1,"proj":153.6,"rostered":true},{"name":"KC Concepcion","pos":"WR","team":"CLE","tier":10,"bye":11,"value":5.1,"price":4.2,"surplus":0.9,"proj":153.4,"rostered":true},{"name":"Juwan Johnson","pos":"TE","team":"NOS","tier":3,"bye":8,"value":4.3,"price":2.9,"surplus":1.4,"proj":150.6,"rostered":true},{"name":"Jalen Coker","pos":"WR","team":"CAR","tier":11,"bye":5,"value":3.4,"price":1.9,"surplus":1.5,"proj":147.4,"rostered":true},{"name":"Stefon Diggs","pos":"WR","team":"FA","tier":11,"bye":null,"value":3.2,"price":5.6,"surplus":-2.4,"proj":146.6,"rostered":true},{"name":"T.J. Hockenson","pos":"TE","team":"MIN","tier":3,"bye":6,"value":2.9,"price":4.0,"surplus":-1.1,"proj":145.6,"rostered":true},{"name":"Hunter Henry","pos":"TE","team":"NEP","tier":3,"bye":11,"value":2.8,"price":3.5,"surplus":-0.7,"proj":145.5,"rostered":true},{"name":"Rashid Shaheed","pos":"WR","team":"SEA","tier":11,"bye":11,"value":2.5,"price":2.3,"surplus":0.2,"proj":144.4,"rostered":true},{"name":"Jayden Higgins","pos":"WR","team":"HOU","tier":11,"bye":8,"value":2.4,"price":2.1,"surplus":0.3,"proj":144.0,"rostered":true},{"name":"Kenneth Gainwell","pos":"RB","team":"TBB","tier":7,"bye":null,"value":2.4,"price":5.9,"surplus":-3.5,"proj":146.9,"rostered":true},{"name":"Dalton Schultz","pos":"TE","team":"HOU","tier":4,"bye":8,"value":1.3,"price":2.0,"surplus":-0.7,"proj":140.3,"rostered":true},{"name":"Deebo Samuel","pos":"WR","team":"FA","tier":12,"bye":8,"value":1.0,"price":4.6,"surplus":-3.6,"proj":139.2,"rostered":true},{"name":"Blake Corum","pos":"RB","team":"LAR","tier":8,"bye":11,"value":1.0,"price":6.8,"surplus":-5.8,"proj":138.6,"rostered":true},{"name":"Jerry Jeudy","pos":"WR","team":"CLE","tier":12,"bye":11,"value":1.0,"price":1.9,"surplus":-0.9,"proj":135.4,"rostered":true},{"name":"Chigoziem Okonkwo","pos":"TE","team":"WAS","tier":4,"bye":null,"value":1.0,"price":3.1,"surplus":-2.1,"proj":133.8,"rostered":true},{"name":"Jordan Mason","pos":"RB","team":"MIN","tier":8,"bye":6,"value":1.0,"price":3.6,"surplus":-2.6,"proj":135.7,"rostered":true},{"name":"Kenyon Sadiq","pos":"TE","team":"NYJ","tier":4,"bye":13,"value":1.0,"price":4.0,"surplus":-3.0,"proj":130.4,"rostered":true},{"name":"Jonathon Brooks","pos":"RB","team":"CAR","tier":8,"bye":5,"value":1.0,"price":3.6,"surplus":-2.6,"proj":132.5,"rostered":true},{"name":"Greg Dulcich","pos":"TE","team":"MIA","tier":4,"bye":6,"value":1.0,"price":1.4,"surplus":-0.4,"proj":128.1,"rostered":true},{"name":"Jacory Croskey-Merritt","pos":"RB","team":"WAS","tier":8,"bye":7,"value":1.0,"price":3.2,"surplus":-2.2,"proj":128.8,"rostered":true},{"name":"Pat Freiermuth","pos":"TE","team":"PIT","tier":4,"bye":9,"value":1.0,"price":1.0,"surplus":0.0,"proj":125.0,"rostered":true},{"name":"AJ Barner","pos":"TE","team":"SEA","tier":4,"bye":11,"value":1.0,"price":1.6,"surplus":-0.6,"proj":124.4,"rostered":true},{"name":"Denzel Boston","pos":"WR","team":"CLE","tier":12,"bye":11,"value":1.0,"price":2.2,"surplus":-1.2,"proj":123.8,"rostered":true},{"name":"Gunnar Helm","pos":"TE","team":"TEN","tier":4,"bye":9,"value":1.0,"price":1.2,"surplus":-0.2,"proj":123.6,"rostered":true},{"name":"Omar Cooper Jr.","pos":"WR","team":"NYJ","tier":12,"bye":13,"value":1.0,"price":2.4,"surplus":-1.4,"proj":123.6,"rostered":true},{"name":"Tua Tagovailoa","pos":"QB","team":"ATL","tier":7,"bye":11,"value":1.0,"price":6.7,"surplus":-5.7,"proj":134.2,"rostered":true},{"name":"Tyjae Spears","pos":"RB","team":"TEN","tier":8,"bye":9,"value":1.0,"price":1.4,"surplus":-0.4,"proj":120.7,"rostered":true},{"name":"Jalen McMillan","pos":"WR","team":"TBB","tier":13,"bye":10,"value":1.0,"price":1.6,"surplus":-0.6,"proj":115.7,"rostered":true},{"name":"Evan Engram","pos":"TE","team":"DEN","tier":4,"bye":10,"value":1.0,"price":1.0,"surplus":0.0,"proj":115.5,"rostered":true},{"name":"Tre Tucker","pos":"WR","team":"LVR","tier":13,"bye":13,"value":1.0,"price":1.0,"surplus":0.0,"proj":115.5,"rostered":true},{"name":"Alvin Kamara","pos":"RB","team":"NOS","tier":8,"bye":8,"value":1.0,"price":4.2,"surplus":-3.2,"proj":117.9,"rostered":true},{"name":"Cade Otton","pos":"TE","team":"TBB","tier":4,"bye":10,"value":1.0,"price":1.2,"surplus":-0.2,"proj":114.8,"rostered":true},{"name":"Oronde Gadsden","pos":"TE","team":"LAC","tier":4,"bye":7,"value":1.0,"price":2.0,"surplus":-1.0,"proj":113.5,"rostered":true},{"name":"De'Zhaun Stribling","pos":"WR","team":"SFO","tier":13,"bye":8,"value":1.0,"price":2.3,"surplus":-1.3,"proj":112.9,"rostered":true},{"name":"Rashod Bateman","pos":"WR","team":"BAL","tier":13,"bye":13,"value":1.0,"price":1.0,"surplus":0.0,"proj":112.8,"rostered":true},{"name":"Tre Harris","pos":"WR","team":"LAC","tier":13,"bye":7,"value":1.0,"price":1.2,"surplus":-0.2,"proj":110.8,"rostered":true},{"name":"Jalen Nailor","pos":"WR","team":"LVR","tier":13,"bye":13,"value":1.0,"price":1.5,"surplus":-0.5,"proj":110.3,"rostered":true},{"name":"Adonai Mitchell","pos":"WR","team":"NYJ","tier":13,"bye":13,"value":1.0,"price":1.0,"surplus":0.0,"proj":109.6,"rostered":true},{"name":"Jauan Jennings","pos":"WR","team":"MIN","tier":13,"bye":6,"value":1.0,"price":1.7,"surplus":-0.7,"proj":109.3,"rostered":true},{"name":"Calvin Ridley","pos":"WR","team":"TEN","tier":13,"bye":9,"value":1.0,"price":1.0,"surplus":0.0,"proj":107.0,"rostered":true},{"name":"Malik Washington","pos":"WR","team":"MIA","tier":13,"bye":6,"value":1.0,"price":1.0,"surplus":0.0,"proj":106.7,"rostered":true},{"name":"Bub Means","pos":"WR","team":"NOS","tier":13,"bye":null,"value":1.0,"price":1.0,"surplus":0.0,"proj":106.3,"rostered":true},{"name":"Zach Charbonnet","pos":"RB","team":"SEA","tier":8,"bye":11,"value":1.0,"price":4.6,"surplus":-3.6,"proj":108.9,"rostered":true},{"name":"Germie Bernard","pos":"WR","team":"PIT","tier":13,"bye":9,"value":1.0,"price":1.0,"surplus":0.0,"proj":104.6,"rostered":true},{"name":"Isiah Pacheco","pos":"RB","team":"DET","tier":8,"bye":6,"value":1.0,"price":2.2,"surplus":-1.2,"proj":107.5,"rostered":true},{"name":"Terrance Ferguson","pos":"TE","team":"LAR","tier":4,"bye":11,"value":1.0,"price":1.4,"surplus":-0.4,"proj":103.4,"rostered":true},{"name":"Travis Hunter","pos":"WR","team":"JAC","tier":13,"bye":7,"value":1.0,"price":2.2,"surplus":-1.2,"proj":103.0,"rostered":true},{"name":"Woody Marks","pos":"RB","team":"HOU","tier":8,"bye":8,"value":1.0,"price":2.1,"surplus":-1.1,"proj":105.7,"rostered":true},{"name":"Tyrone Tracy","pos":"RB","team":"NYG","tier":8,"bye":8,"value":1.0,"price":2.8,"surplus":-1.8,"proj":105.6,"rostered":true},{"name":"Antonio Williams","pos":"WR","team":"WAS","tier":13,"bye":7,"value":1.0,"price":1.2,"surplus":-0.2,"proj":101.1,"rostered":true},{"name":"Chris Rodriguez","pos":"RB","team":"JAC","tier":8,"bye":7,"value":1.0,"price":2.7,"surplus":-1.7,"proj":103.8,"rostered":true},{"name":"Ryan Flournoy","pos":"WR","team":"DAL","tier":13,"bye":14,"value":1.0,"price":1.0,"surplus":0.0,"proj":100.7,"rostered":true},{"name":"Cooper Kupp","pos":"WR","team":"SEA","tier":13,"bye":11,"value":1.0,"price":1.1,"surplus":-0.1,"proj":100.0,"rostered":true},{"name":"Deshaun Watson","pos":"QB","team":"CLE","tier":7,"bye":11,"value":1.0,"price":3.4,"surplus":-2.4,"proj":111.2,"rostered":true},{"name":"Dylan Sampson","pos":"RB","team":"CLE","tier":8,"bye":11,"value":1.0,"price":1.0,"surplus":0.0,"proj":99.9,"rostered":true},{"name":"Shedeur Sanders","pos":"QB","team":"CLE","tier":7,"bye":11,"value":1.0,"price":5.2,"surplus":-4.2,"proj":106.2,"rostered":true},{"name":"Mike Gesicki","pos":"TE","team":"CIN","tier":4,"bye":6,"value":1.0,"price":1.0,"surplus":0.0,"proj":93.1,"rostered":true},{"name":"Zachariah Branch","pos":"WR","team":"ATL","tier":13,"bye":11,"value":1.0,"price":1.2,"surplus":-0.2,"proj":92.9,"rostered":true},{"name":"Michael Penix Jr.","pos":"QB","team":"ATL","tier":7,"bye":11,"value":1.0,"price":3.0,"surplus":-2.0,"proj":102.8,"rostered":true},{"name":"Tyler Allgeier","pos":"RB","team":"ARI","tier":8,"bye":14,"value":1.0,"price":2.9,"surplus":-1.9,"proj":92.9,"rostered":true},{"name":"Mason Taylor","pos":"TE","team":"NYJ","tier":4,"bye":13,"value":1.0,"price":1.0,"surplus":0.0,"proj":88.1,"rostered":true},{"name":"Chris Bell","pos":"WR","team":"MIA","tier":13,"bye":6,"value":1.0,"price":1.0,"surplus":0.0,"proj":88.0,"rostered":true},{"name":"Isaac TeSlaa","pos":"WR","team":"DET","tier":13,"bye":6,"value":1.0,"price":1.1,"surplus":-0.1,"proj":87.4,"rostered":true},{"name":"Jack Bech","pos":"WR","team":"LVR","tier":13,"bye":13,"value":1.0,"price":1.0,"surplus":0.0,"proj":87.0,"rostered":true},{"name":"Pat Bryant","pos":"WR","team":"DEN","tier":13,"bye":10,"value":1.0,"price":1.0,"surplus":0.0,"proj":86.7,"rostered":true},{"name":"Darnell Mooney","pos":"WR","team":"NYG","tier":13,"bye":8,"value":1.0,"price":1.0,"surplus":0.0,"proj":84.4,"rostered":true},{"name":"David Njoku","pos":"TE","team":"LAC","tier":4,"bye":7,"value":1.0,"price":1.6,"surplus":-0.6,"proj":83.7,"rostered":true},{"name":"Brian Robinson","pos":"RB","team":"ATL","tier":8,"bye":11,"value":1.0,"price":1.9,"surplus":-0.9,"proj":86.5,"rostered":true},{"name":"Darius Slayton","pos":"WR","team":"NYG","tier":13,"bye":8,"value":1.0,"price":0.0,"surplus":1.0,"proj":83.4,"rostered":true},{"name":"Ted Hurst","pos":"WR","team":"TBB","tier":13,"bye":10,"value":1.0,"price":0.0,"surplus":1.0,"proj":82.8,"rostered":true},{"name":"Jaylin Noel","pos":"WR","team":"HOU","tier":13,"bye":8,"value":1.0,"price":0.0,"surplus":1.0,"proj":82.1,"rostered":true},{"name":"Theo Wease","pos":"WR","team":"MIA","tier":13,"bye":6,"value":1.0,"price":1.0,"surplus":0.0,"proj":82.0,"rostered":true},{"name":"Andrei Iosivas","pos":"WR","team":"CIN","tier":13,"bye":6,"value":1.0,"price":0.0,"surplus":1.0,"proj":81.5,"rostered":true},{"name":"Kayshon Boutte","pos":"WR","team":"NEP","tier":13,"bye":11,"value":1.0,"price":1.0,"surplus":0.0,"proj":79.2,"rostered":true},{"name":"Tank Dell","pos":"WR","team":"HOU","tier":13,"bye":8,"value":1.0,"price":1.5,"surplus":-0.5,"proj":78.0,"rostered":true},{"name":"Keaton Mitchell","pos":"RB","team":"LAC","tier":8,"bye":7,"value":1.0,"price":1.4,"surplus":-0.4,"proj":80.5,"rostered":true},{"name":"Tyreek Hill","pos":"WR","team":"FA","tier":13,"bye":null,"value":1.0,"price":1.5,"surplus":-0.5,"proj":77.4,"rostered":true},{"name":"Tory Horton","pos":"WR","team":"SEA","tier":13,"bye":11,"value":1.0,"price":1.0,"surplus":0.0,"proj":76.4,"rostered":true},{"name":"Darnell Washington","pos":"TE","team":"PIT","tier":4,"bye":9,"value":1.0,"price":0.0,"surplus":1.0,"proj":75.3,"rostered":true},{"name":"Elijah Sarratt","pos":"WR","team":"BAL","tier":13,"bye":13,"value":1.0,"price":0.0,"surplus":1.0,"proj":75.1,"rostered":true},{"name":"Keenan Allen","pos":"WR","team":"FA","tier":13,"bye":7,"value":1.0,"price":0.0,"surplus":1.0,"proj":73.6,"rostered":true},{"name":"Ja'Kobi Lane","pos":"WR","team":"BAL","tier":13,"bye":13,"value":1.0,"price":0.0,"surplus":1.0,"proj":72.3,"rostered":true},{"name":"Xavier Legette","pos":"WR","team":"CAR","tier":13,"bye":5,"value":1.0,"price":0.0,"surplus":1.0,"proj":70.4,"rostered":true},{"name":"Devaughn Vele","pos":"WR","team":"NOS","tier":13,"bye":8,"value":1.0,"price":0.0,"surplus":1.0,"proj":70.2,"rostered":true},{"name":"Caleb Douglas","pos":"WR","team":"MIA","tier":13,"bye":6,"value":1.0,"price":0.0,"surplus":1.0,"proj":68.8,"rostered":true},{"name":"Michael Mayer","pos":"TE","team":"LVR","tier":4,"bye":13,"value":1.0,"price":0.0,"surplus":1.0,"proj":68.7,"rostered":true},{"name":"Colby Parkinson","pos":"TE","team":"LAR","tier":4,"bye":11,"value":1.0,"price":0.0,"surplus":1.0,"proj":68.4,"rostered":true},{"name":"Troy Franklin","pos":"WR","team":"DEN","tier":13,"bye":10,"value":1.0,"price":0.0,"surplus":1.0,"proj":67.9,"rostered":true},{"name":"AJ Dillon","pos":"RB","team":"CAR","tier":8,"bye":5,"value":1.0,"price":0.0,"surplus":1.0,"proj":70.3,"rostered":true},{"name":"Eli Stowers","pos":"TE","team":"PHI","tier":4,"bye":10,"value":1.0,"price":3.1,"surplus":-2.1,"proj":67.0,"rostered":true},{"name":"Dontayvion Wicks","pos":"WR","team":"PHI","tier":13,"bye":10,"value":1.0,"price":1.0,"surplus":0.0,"proj":66.5,"rostered":true},{"name":"Tyquan Thornton","pos":"WR","team":"KCC","tier":13,"bye":5,"value":1.0,"price":0.0,"surplus":1.0,"proj":65.1,"rostered":true},{"name":"Ashton Dulin","pos":"WR","team":"IND","tier":13,"bye":13,"value":1.0,"price":0.0,"surplus":1.0,"proj":64.5,"rostered":true},{"name":"Ty Johnson","pos":"RB","team":"BUF","tier":8,"bye":7,"value":1.0,"price":1.0,"surplus":0.0,"proj":67.2,"rostered":true},{"name":"Braelon Allen","pos":"RB","team":"NYJ","tier":8,"bye":13,"value":1.0,"price":1.0,"surplus":0.0,"proj":66.8,"rostered":true},{"name":"Marvin Mims","pos":"WR","team":"DEN","tier":13,"bye":10,"value":1.0,"price":0.0,"surplus":1.0,"proj":63.0,"rostered":true},{"name":"Olamide Zaccheaus","pos":"WR","team":"ATL","tier":13,"bye":11,"value":1.0,"price":0.0,"surplus":1.0,"proj":62.3,"rostered":true},{"name":"Malachi Fields","pos":"WR","team":"NYG","tier":13,"bye":8,"value":1.0,"price":0.0,"surplus":1.0,"proj":62.0,"rostered":true},{"name":"Justice Hill","pos":"RB","team":"BAL","tier":8,"bye":13,"value":1.0,"price":1.0,"surplus":0.0,"proj":63.7,"rostered":true},{"name":"Theo Johnson","pos":"TE","team":"NYG","tier":4,"bye":8,"value":1.0,"price":0.0,"surplus":1.0,"proj":60.5,"rostered":true},{"name":"Cole Kmet","pos":"TE","team":"CHI","tier":4,"bye":10,"value":1.0,"price":0.0,"surplus":1.0,"proj":59.9,"rostered":true},{"name":"Josh Cameron","pos":"WR","team":"JAC","tier":13,"bye":null,"value":1.0,"price":0.0,"surplus":1.0,"proj":59.6,"rostered":true},{"name":"Samaje Perine","pos":"RB","team":"CIN","tier":8,"bye":6,"value":0.0,"price":1.0,"surplus":-1.0,"proj":62.5,"rostered":false},{"name":"Chimere Dike","pos":"WR","team":"TEN","tier":13,"bye":9,"value":0.0,"price":0.0,"surplus":0.0,"proj":59.0,"rostered":false},{"name":"Mike Washington Jr.","pos":"RB","team":"LVR","tier":8,"bye":13,"value":0.0,"price":1.0,"surplus":-1.0,"proj":61.9,"rostered":false},{"name":"KaVontae Turpin","pos":"WR","team":"DAL","tier":13,"bye":14,"value":0.0,"price":0.0,"surplus":0.0,"proj":58.7,"rostered":false},{"name":"Skyler Bell","pos":"WR","team":"BUF","tier":13,"bye":7,"value":0.0,"price":0.0,"surplus":0.0,"proj":57.9,"rostered":false},{"name":"Jaylin Lane","pos":"WR","team":"WAS","tier":13,"bye":7,"value":0.0,"price":0.0,"surplus":0.0,"proj":57.9,"rostered":false},{"name":"Jahan Dotson","pos":"WR","team":"ATL","tier":13,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":57.6,"rostered":false},{"name":"Nick Westbrook-Ikhine","pos":"WR","team":"IND","tier":13,"bye":13,"value":0.0,"price":0.0,"surplus":0.0,"proj":57.1,"rostered":false},{"name":"Christian Kirk","pos":"WR","team":"SFO","tier":13,"bye":8,"value":0.0,"price":1.0,"surplus":-1.0,"proj":56.7,"rostered":false},{"name":"Elijah Arroyo","pos":"TE","team":"SEA","tier":5,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":56.1,"rostered":false},{"name":"Dawson Knox","pos":"TE","team":"BUF","tier":5,"bye":7,"value":0.0,"price":0.0,"surplus":0.0,"proj":55.8,"rostered":false},{"name":"LeQuint Allen","pos":"RB","team":"JAC","tier":8,"bye":7,"value":0.0,"price":0.0,"surplus":0.0,"proj":58.4,"rostered":false},{"name":"Noah Gray","pos":"TE","team":"KCC","tier":5,"bye":5,"value":0.0,"price":0.0,"surplus":0.0,"proj":55.3,"rostered":false},{"name":"Jalen Tolbert","pos":"WR","team":"MIA","tier":13,"bye":6,"value":0.0,"price":0.0,"surplus":0.0,"proj":55.1,"rostered":false},{"name":"Ja'Tavion Sanders","pos":"TE","team":"CAR","tier":5,"bye":5,"value":0.0,"price":0.0,"surplus":0.0,"proj":55.0,"rostered":false},{"name":"Tank Bigsby","pos":"RB","team":"PHI","tier":8,"bye":10,"value":0.0,"price":1.5,"surplus":-1.5,"proj":57.7,"rostered":false},{"name":"MarShawn Lloyd","pos":"RB","team":"GBP","tier":9,"bye":11,"value":0.0,"price":1.3,"surplus":-1.3,"proj":56.4,"rostered":false},{"name":"Erick All","pos":"TE","team":"CIN","tier":5,"bye":6,"value":0.0,"price":0.0,"surplus":0.0,"proj":52.2,"rostered":false},{"name":"Carson Beck","pos":"QB","team":"ARI","tier":7,"bye":14,"value":0.0,"price":3.0,"surplus":-3.0,"proj":63.4,"rostered":false},{"name":"Treylon Burks","pos":"WR","team":"WAS","tier":13,"bye":7,"value":0.0,"price":0.0,"surplus":0.0,"proj":51.7,"rostered":false},{"name":"Elic Ayomanor","pos":"WR","team":"TEN","tier":13,"bye":9,"value":0.0,"price":0.0,"surplus":0.0,"proj":51.6,"rostered":false},{"name":"Mack Hollins","pos":"WR","team":"NEP","tier":13,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":51.3,"rostered":false},{"name":"James Conner","pos":"RB","team":"ARI","tier":9,"bye":14,"value":0.0,"price":1.0,"surplus":-1.0,"proj":53.6,"rostered":false},{"name":"Jordan James","pos":"RB","team":"SFO","tier":9,"bye":8,"value":0.0,"price":1.0,"surplus":-1.0,"proj":53.4,"rostered":false},{"name":"Isaiah Bond","pos":"WR","team":"CLE","tier":13,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":49.1,"rostered":false},{"name":"Marquise Brown","pos":"WR","team":"PHI","tier":13,"bye":null,"value":0.0,"price":0.0,"surplus":0.0,"proj":49.0,"rostered":false},{"name":"Jaylen Wright","pos":"RB","team":"MIA","tier":9,"bye":6,"value":0.0,"price":0.0,"surplus":0.0,"proj":51.6,"rostered":false},{"name":"Keon Coleman","pos":"WR","team":"BUF","tier":13,"bye":7,"value":0.0,"price":0.0,"surplus":0.0,"proj":48.5,"rostered":false},{"name":"Austin Hooper","pos":"TE","team":"ATL","tier":5,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":46.7,"rostered":false},{"name":"Chris Brooks","pos":"RB","team":"GBP","tier":9,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":49.0,"rostered":false},{"name":"Luke Musgrave","pos":"TE","team":"GBP","tier":5,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":45.9,"rostered":false},{"name":"Adam Randall","pos":"RB","team":"BAL","tier":9,"bye":13,"value":0.0,"price":0.0,"surplus":0.0,"proj":48.3,"rostered":false},{"name":"Dyami Brown","pos":"WR","team":"WAS","tier":13,"bye":7,"value":0.0,"price":0.0,"surplus":0.0,"proj":45.2,"rostered":false},{"name":"Ben Sims","pos":"TE","team":"MIA","tier":5,"bye":null,"value":0.0,"price":0.0,"surplus":0.0,"proj":44.9,"rostered":false},{"name":"Tommy Tremble","pos":"TE","team":"CAR","tier":5,"bye":5,"value":0.0,"price":0.0,"surplus":0.0,"proj":44.2,"rostered":false},{"name":"Savion Williams","pos":"WR","team":"GBP","tier":13,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":44.2,"rostered":false},{"name":"Kevin Austin","pos":"WR","team":"NOS","tier":13,"bye":8,"value":0.0,"price":0.0,"surplus":0.0,"proj":44.1,"rostered":false},{"name":"Will Kacmarek","pos":"TE","team":"MIA","tier":5,"bye":6,"value":0.0,"price":0.0,"surplus":0.0,"proj":44.1,"rostered":false},{"name":"Zavion Thomas","pos":"WR","team":"CHI","tier":13,"bye":10,"value":0.0,"price":0.0,"surplus":0.0,"proj":43.8,"rostered":false},{"name":"Jaydon Blue","pos":"RB","team":"DAL","tier":9,"bye":14,"value":0.0,"price":1.0,"surplus":-1.0,"proj":46.6,"rostered":false},{"name":"Demario Douglas","pos":"WR","team":"NEP","tier":13,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":43.4,"rostered":false},{"name":"Jonah Coleman","pos":"RB","team":"DEN","tier":9,"bye":10,"value":0.0,"price":2.3,"surplus":-2.3,"proj":45.4,"rostered":false},{"name":"Dont'e Thornton","pos":"WR","team":"LVR","tier":13,"bye":13,"value":0.0,"price":0.0,"surplus":0.0,"proj":42.1,"rostered":false},{"name":"Emari Demercado","pos":"RB","team":"KCC","tier":9,"bye":5,"value":0.0,"price":1.0,"surplus":-1.0,"proj":45.0,"rostered":false},{"name":"Emmett Johnson","pos":"RB","team":"KCC","tier":9,"bye":5,"value":0.0,"price":0.0,"surplus":0.0,"proj":44.7,"rostered":false},{"name":"Tutu Atwell","pos":"WR","team":"MIA","tier":13,"bye":6,"value":0.0,"price":0.0,"surplus":0.0,"proj":41.7,"rostered":false},{"name":"Kirk Cousins","pos":"QB","team":"LVR","tier":7,"bye":13,"value":0.0,"price":6.7,"surplus":-6.7,"proj":52.8,"rostered":false},{"name":"Charlie Kolar","pos":"TE","team":"LAC","tier":5,"bye":7,"value":0.0,"price":0.0,"surplus":0.0,"proj":41.3,"rostered":false},{"name":"Kendrick Bourne","pos":"WR","team":"ARI","tier":13,"bye":14,"value":0.0,"price":0.0,"surplus":0.0,"proj":41.2,"rostered":false},{"name":"Eli Raridon","pos":"TE","team":"NEP","tier":5,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":40.2,"rostered":false},{"name":"Bryce Lance","pos":"WR","team":"NOS","tier":13,"bye":8,"value":0.0,"price":0.0,"surplus":0.0,"proj":40.2,"rostered":false},{"name":"Kevin Coleman","pos":"WR","team":"MIA","tier":13,"bye":6,"value":0.0,"price":0.0,"surplus":0.0,"proj":40.1,"rostered":false},{"name":"Demarcus Robinson","pos":"WR","team":"SFO","tier":13,"bye":8,"value":0.0,"price":0.0,"surplus":0.0,"proj":39.9,"rostered":false},{"name":"Jake Tonges","pos":"TE","team":"SFO","tier":5,"bye":8,"value":0.0,"price":0.0,"surplus":0.0,"proj":39.7,"rostered":false},{"name":"Ray Davis","pos":"RB","team":"BUF","tier":9,"bye":7,"value":0.0,"price":1.0,"surplus":-1.0,"proj":42.4,"rostered":false},{"name":"Luke Schoonmaker","pos":"TE","team":"DAL","tier":5,"bye":14,"value":0.0,"price":0.0,"surplus":0.0,"proj":39.4,"rostered":false},{"name":"Tyler Higbee","pos":"TE","team":"LAR","tier":5,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":39.4,"rostered":false},{"name":"CJ Daniels","pos":"WR","team":"LAR","tier":13,"bye":null,"value":0.0,"price":0.0,"surplus":0.0,"proj":39.3,"rostered":false},{"name":"Devontez Walker","pos":"WR","team":"BAL","tier":13,"bye":13,"value":0.0,"price":0.0,"surplus":0.0,"proj":39.3,"rostered":false},{"name":"Darren Waller","pos":"TE","team":"FA","tier":5,"bye":null,"value":0.0,"price":0.0,"surplus":0.0,"proj":39.1,"rostered":false},{"name":"Joshua Palmer","pos":"WR","team":"BUF","tier":13,"bye":7,"value":0.0,"price":0.0,"surplus":0.0,"proj":39.0,"rostered":false},{"name":"Konata Mumpfield","pos":"WR","team":"LAR","tier":13,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":39.0,"rostered":false},{"name":"Kyle Juszczyk","pos":"RB","team":"SFO","tier":9,"bye":8,"value":0.0,"price":0.0,"surplus":0.0,"proj":41.9,"rostered":false},{"name":"Jeremy Ruckert","pos":"TE","team":"NYJ","tier":5,"bye":13,"value":0.0,"price":0.0,"surplus":0.0,"proj":38.9,"rostered":false},{"name":"Cyrus Allen","pos":"WR","team":"KCC","tier":13,"bye":5,"value":0.0,"price":1.1,"surplus":-1.1,"proj":38.8,"rostered":false},{"name":"Max Klare","pos":"TE","team":"LAR","tier":5,"bye":11,"value":0.0,"price":0.0,"surplus":0.0,"proj":38.8,"rostered":false}],"plan":[{"slot":"QB1","budget":48,"note":"QB4-QB10 \u2014 anchor the mandatory slot"},{"slot":"QB2","budget":15,"note":"QB28-30 cliff; bye insurance, upgrade later via FAAB"},{"slot":"RB1","budget":30,"note":"tier 1-2"},{"slot":"RB2","budget":16,"note":""},{"slot":"WR1","budget":30,"note":"tier 1"},{"slot":"WR2","budget":18,"note":""},{"slot":"WR3/FLEX","budget":14,"note":""},{"slot":"TE","budget":12,"note":"TE is only ~6-7% of board value; do not overpay"},{"slot":"Bench x5","budget":17,"note":"$1-6 each; eliminated rosters refill the pool weekly"}]};
+const LG = P.league, DATA = P.players, PLAN = P.plan, ROSTERS = P.rosters;
+const MIN_ROSTER = {QB:2, RB:4, WR:5, TE:1};
+const KEY = 'birdbrain_auction_v2';
+const SLEEPER = 'https://api.sleeper.app/v1';
+
+let S = JSON.parse(localStorage.getItem(KEY) || '{"sold":{}}');
+let filt='ALL', sort='value', hideFilled=false, open=null, active='board';
+let autoTimer=null, lastSync=null, syncErr=null;
+
+const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+const byId = id => document.getElementById(id);
+const wide = () => window.matchMedia('(min-width:820px)').matches;
+const BOARD = {}; DATA.forEach(p => BOARD[p.name] = p);
+const ROSTER_NAME = {}; ROSTERS.forEach(r => ROSTER_NAME[r.roster_id] = r.name);
+const MY = LG.my_roster_id;
+
+/* ---------- state helpers ---------------------------------------------- */
+// Every record carries {name,pos,price,roster,source}. `source:'manual'` is
+// authoritative: sync must never overwrite or delete it. That asymmetry is
+// the whole safety model — a flaky sync can only ever ADD information.
+const sold = () => S.sold;
+const mineRecs = () => Object.values(S.sold).filter(s => s.roster === MY);
+const spent = () => mineRecs().reduce((a,s) => a + s.price, 0);
+const budgetLeft = () => LG.budget - spent();
+const slotsLeft = () => LG.roster_size - mineRecs().length;
+const maxLegal = () => Math.max(1, budgetLeft() - (slotsLeft() - 1));
+
+function rosterSpent(rid){
+  return Object.values(S.sold).filter(s => s.roster === rid)
+    .reduce((a,s) => a + s.price, 0);
+}
+function rosterCount(rid){
+  return Object.values(S.sold).filter(s => s.roster === rid).length;
+}
+function rosterNeeds(rid){
+  const have = {};
+  Object.values(S.sold).filter(s => s.roster === rid)
+    .forEach(s => have[s.pos] = (have[s.pos]||0) + 1);
+  const n = {};
+  for (const k in MIN_ROSTER) n[k] = Math.max(0, MIN_ROSTER[k] - (have[k]||0));
+  return n;
+}
+const needs = () => rosterNeeds(MY);
+
+function inflation(){
+  let paid = 0; Object.values(S.sold).forEach(s => paid += s.price);
+  let left = 0;
+  DATA.forEach(p => { if (p.rostered && !S.sold[p.name]) left += p.value; });
+  return left > 0 ? (LG.teams * LG.budget - paid) / left : 1;
+}
+const qbLeft = () => DATA.filter(p => p.pos==='QB' && p.value > 5 && !S.sold[p.name]).length;
+
+function maxBid(p){
+  let rec = p.value * inflation();
+  const own = mineRecs().filter(s => s.pos === p.pos);
+  const ded = LG.dedicated[p.pos] || 0;
+  if (ded > 0 && own.length >= ded){
+    const worst = Math.min.apply(null, own.map(s => (BOARD[s.name]||{value:1}).value));
+    rec *= Math.max(0.35, 1 - worst / Math.max(p.value, 1));
+  }
+  if (p.pos === 'QB' && needs().QB > 0){
+    const l = qbLeft();
+    if (l <= 6) rec *= Math.min(1.35, 1 + (7 - l) * 0.06);
+  }
+  return Math.min(rec, maxLegal());
+}
+
+function warnings(){
+  const w = [], n = needs();
+  if (n.QB > 0 && qbLeft() <= 8)
+    w.push(['QB pool thinning', qbLeft()+' startable QBs left · you still need '+n.QB]);
+  const byes = {};
+  mineRecs().filter(s => s.pos === 'QB').forEach(s => {
+    const b = (BOARD[s.name]||{}).bye; if (b) (byes[b] = byes[b]||[]).push(s.name);
+  });
+  for (const b in byes) if (byes[b].length > 1)
+    w.push(['Both QBs bye week '+b, byes[b].join(', ')+' — mandatory QB slot would be empty']);
+  const tm = {};
+  mineRecs().forEach(s => { const t=(BOARD[s.name]||{}).team; if(t) (tm[t]=tm[t]||[]).push(s.name); });
+  for (const t in tm) if (tm[t].length > 2)
+    w.push(['Stack risk: '+tm[t].length+' from '+t, tm[t].join(', ')+' — correlated weeks raise elimination odds']);
+  if (slotsLeft() > 0 && budgetLeft() <= slotsLeft())
+    w.push(['At the $1 floor', '$'+budgetLeft()+' for '+slotsLeft()+' slots']);
+  if (syncErr) w.push(['Sync failed — manual still works', syncErr]);
+  return w;
+}
+
+/* ---------- Sleeper live sync ------------------------------------------ */
+async function syncDraft(){
+  if (!LG.draft_id){ syncErr = 'no draft id in payload'; render(); return; }
+  const btn = byId('syncbtn'); btn.textContent = '…';
+  try {
+    const r = await fetch(SLEEPER + '/draft/' + LG.draft_id + '/picks', {cache:'no-store'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const picks = await r.json();
+    const seen = new Set();
+    let added = 0, skipped = 0, unknown = 0;
+    picks.forEach(pk => {
+      const md = pk.metadata || {};
+      // auction amount: documented at metadata.amount, but parse defensively —
+      // this is the one field that cannot be verified until a real auction runs
+      let amt = md.amount != null ? md.amount : (pk.amount != null ? pk.amount : null);
+      amt = amt === null ? null : parseFloat(amt);
+      const nm = ((md.first_name||'') + ' ' + (md.last_name||'')).trim()
+        || md.player_name || ('player ' + pk.player_id);
+      const key = BOARD[nm] ? nm : ('x:' + nm);
+      if (!BOARD[nm]) unknown++;
+      seen.add(key);
+      const cur = S.sold[key];
+      if (cur && cur.source === 'manual'){ skipped++; return; }   // manual is law
+      S.sold[key] = {
+        name: nm, pos: (md.position || (BOARD[nm]||{}).pos || '?'),
+        price: (amt == null || isNaN(amt)) ? 0 : amt,
+        roster: parseInt(pk.roster_id || pk.draft_slot || 0, 10),
+        source: 'sync'
+      };
+      added++;
+    });
+    // drop sync rows the draft no longer has (commissioner edits); never
+    // touch manual rows
+    Object.keys(S.sold).forEach(k => {
+      if (S.sold[k].source === 'sync' && !seen.has(k)) delete S.sold[k];
+    });
+    save();
+    lastSync = new Date();
+    syncErr = picks.length && added === 0 && skipped === 0 ? 'picks returned but none parsed' : null;
+    byId('syncstat').innerHTML = '<b>synced</b> ' + picks.length + ' picks'
+      + (skipped ? ' · ' + skipped + ' manual kept' : '')
+      + (unknown ? ' · ' + unknown + ' off-board' : '');
+  } catch (e) {
+    syncErr = e.message;
+    byId('syncstat').innerHTML = '<i>sync failed</i> — manual still works';
+  }
+  byId('syncbtn').textContent = 'Sync';
+  render();
+}
+
+/* ---------- rendering --------------------------------------------------- */
+const money = v => '$' + (Math.round(v*10)/10).toFixed(v < 10 ? 1 : 0);
+const teamOpts = sel => ROSTERS.map(r =>
+  '<option value="'+r.roster_id+'"'+(r.roster_id===sel?' selected':'')+'>'
+  + r.name + (r.me ? ' (me)' : '') + '</option>').join('');
+
+function rowHTML(p, i, pane){
+  const s = S.sold[p.name];
+  const cls = 'row' + (s ? (s.roster === MY ? ' mine' : ' gone') : '');
+  const sgn = p.surplus >= 0 ? '+' : '';
+  const uid = pane + '-' + encodeURIComponent(p.name);
+  let tag = '';
+  if (s) tag = ' · <b>' + (s.roster===MY ? 'MINE' : (ROSTER_NAME[s.roster]||'sold'))
+    + ' ' + money(s.price) + '</b>' + (s.source==='manual' ? ' ✎' : '');
+  return '<div class="'+cls+'" data-n="'+encodeURIComponent(p.name)+'" data-u="'+uid+'">'
+    + '<div class="rk">'+(i+1)+'</div>'
+    + '<div class="who"><div class="nm">'+p.name+'</div>'
+    + '<div class="mt">'+p.pos+' · '+p.team+' · T'+(p.tier||'-')+(p.bye?' · bye '+p.bye:'')+tag+'</div></div>'
+    + '<div class="pv"><div class="ours">'+money(p.value)+'</div>'
+    + '<div class="mkt">mkt '+money(p.price)+'</div></div>'
+    + '<div class="sur '+(p.surplus>=0?'p':'n')+'">'+sgn+Math.round(p.surplus)+'</div></div>'
+    + '<div class="sale" id="sale-'+uid+'" data-n="'+encodeURIComponent(p.name)+'">'
+    + '<input type="number" inputmode="decimal" placeholder="$" id="pr-'+uid+'">'
+    + '<select id="tm-'+uid+'">'+teamOpts(MY)+'</select>'
+    + '<button class="btn btn-primary btn-sm" data-a="rec">Record</button>'
+    + '<div class="rec">your max <b>'+money(maxBid(p))+'</b> · market '+money(p.price)+'</div></div>';
+}
+
+function render(){
+  byId('subline').textContent = LG.name + ' · ' + LG.teams + 'tm superflex · $' + LG.budget + ' auction';
+  byId('s-budget').textContent = money(budgetLeft());
+  byId('s-slots').textContent = slotsLeft();
+  byId('s-max').textContent = money(maxLegal());
+  byId('s-infl').textContent = inflation().toFixed(2) + '×';
+  byId('spendbar').style.width = (100 * spent() / LG.budget) + '%';
+
+  const w = warnings();
+  byId('warnwrap').innerHTML = w.length
+    ? '<div class="card" style="padding:11px 13px">' + w.map(x =>
+        '<div class="watch"><div class="watch-dot"></div><div class="watch-text">'
+        + x[0] + '<small>' + x[1] + '</small></div></div>').join('') + '</div>' : '';
+
+  // board
+  const q = (byId('q').value || '').toLowerCase();
+  const n = needs();
+  let list = DATA.filter(p => (filt==='ALL' || p.pos===filt)
+    && (!q || p.name.toLowerCase().includes(q))
+    && (!hideFilled || n[p.pos] > 0));
+  if (sort === 'surplus') list = list.slice().sort((a,b) => b.surplus - a.surplus);
+  else if (sort === 'fade') list = list.slice().sort((a,b) => a.surplus - b.surplus);
+  else if (sort === 'market') list = list.slice().sort((a,b) => b.price - a.price);
+  byId('board').innerHTML = list.slice(0,200).map((p,i)=>rowHTML(p,i,'b')).join('')
+    || '<div class="empty">No players</div>';
+  byId('c-board').textContent = list.length + ' shown';
+
+  // room
+  byId('room').innerHTML = ROSTERS.map(r => {
+    const left = LG.budget - rosterSpent(r.roster_id);
+    const sl = LG.roster_size - rosterCount(r.roster_id);
+    const mx = Math.max(1, left - (sl - 1));
+    const nd = rosterNeeds(r.roster_id);
+    const need = Object.keys(nd).filter(k=>nd[k]>0).map(k=>k+nd[k]).join(' ') || 'full';
+    return '<div class="trow'+(r.me?' me':'')+'">'
+      + '<div style="flex:1;min-width:0"><div class="tname">'+r.name+(r.me?' ★':'')+'</div>'
+      + '<div class="tneed">'+sl+' slots · needs '+need+'</div></div>'
+      + '<div class="tmoney">'+money(left)+'<small>max '+money(mx)+'</small></div></div>';
+  }).join('');
+
+  // my team
+  const mr = mineRecs();
+  byId('c-team').textContent = mr.length;
+  byId('roster').innerHTML = mr.length ? mr.map((s,i) => {
+    const p = BOARD[s.name];
+    return '<div class="trow"><div style="flex:1;min-width:0">'
+      + '<div class="tname">'+s.name+(s.source==='manual'?' ✎':'')+'</div>'
+      + '<div class="tneed">'+s.pos+(p&&p.bye?' · bye '+p.bye:'')
+      + (p?' · value '+money(p.value):' · off board')+'</div></div>'
+      + '<div class="tmoney">'+money(s.price)+'</div></div>';
+  }).join('') : '<div class="empty">Nothing bought yet</div>';
+  const by = {};
+  mr.forEach(s => { by[s.pos] = by[s.pos]||{n:0,$:0}; by[s.pos].n++; by[s.pos].$ += s.price; });
+  byId('spend').innerHTML = ['QB','RB','WR','TE'].map(k => {
+    const d = by[k]||{n:0,$:0};
+    return '<div class="posrow"><span>'+k+' <span style="color:var(--muted)">×'+d.n+'</span></span>'
+      + '<b>'+money(d.$)+'</b></div>';
+  }).join('');
+  byId('plan').innerHTML = PLAN.map(x =>
+    '<div class="posrow"><span>'+x.slot+'<br><span style="color:var(--muted);font-size:10.5px">'
+    +(x.note||'')+'</span></span><b>$'+x.budget+'</b></div>').join('');
+
+  // manual list
+  const man = Object.entries(S.sold).filter(([k,s]) => s.source==='manual');
+  byId('c-man').textContent = man.length;
+  byId('manlist').innerHTML = man.length ? man.map(([k,s]) =>
+    '<div class="trow"><div style="flex:1;min-width:0"><div class="tname">'+s.name+'</div>'
+    + '<div class="tneed">'+s.pos+' · '+(ROSTER_NAME[s.roster]||'?')+'</div></div>'
+    + '<div class="tmoney">'+money(s.price)
+    + '<small><span class="link" data-del="'+encodeURIComponent(k)+'" '
+    + 'style="cursor:pointer;color:var(--neg-t)">remove</span></small></div></div>').join('')
+    : '<div class="empty">None — sync is unrestricted</div>';
+
+  if (open){ const el = byId('sale-'+open); if (el) el.classList.add('on'); }
+  if (lastSync && !syncErr) {
+    const ago = Math.round((Date.now() - lastSync.getTime())/1000);
+    if (ago > 3) byId('syncstat').innerHTML = '<b>synced</b> ' + ago + 's ago';
+  }
+}
+
+/* ---------- panes ------------------------------------------------------- */
+const TABS = [['board','Board'],['room','Room'],['team','Team'],['add','Add']];
+byId('toptabs').innerHTML = TABS.map(([k,l]) =>
+  '<span class="chip'+(k==='board'?' on':'')+'" data-t="'+k+'">'+l+'</span>').join('');
+function setPane(p){
+  active = p;
+  const all = ['board','room','team','add'];
+  if (wide()){
+    byId('pane-board').classList.add('on');
+    const sideOn = (p === 'board') ? 'room' : p;
+    ['room','team','add'].forEach(x => byId('pane-'+x).classList.toggle('on', x===sideOn));
+  } else {
+    all.forEach(x => byId('pane-'+x).classList.toggle('on', x===p));
+  }
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.p===p));
+  document.querySelectorAll('#toptabs .chip').forEach(c => c.classList.toggle('on', c.dataset.t===p));
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => { setPane(b.dataset.p); window.scrollTo(0,0); });
+byId('toptabs').onclick = e => { const c=e.target.closest('.chip'); if(c) setPane(c.dataset.t); };
+window.addEventListener('resize', () => setPane(active));
+
+/* ---------- filters ----------------------------------------------------- */
+byId('chips').innerHTML = ['ALL','QB','RB','WR','TE']
+  .map(k => '<span class="chip'+(k==='ALL'?' on':'')+'" data-f="'+k+'">'+k+'</span>').join('')
+  + '<span class="chip alt" data-h="1">Hide filled</span>';
+byId('sorts').innerHTML = [['value','Value'],['surplus','Buys'],['fade','Fade'],['market','Market']]
+  .map(([k,l]) => '<span class="chip alt'+(k==='value'?' on':'')+'" data-s="'+k+'">'+l+'</span>').join('');
+byId('chips').onclick = e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  if (c.dataset.h){ hideFilled = !hideFilled; c.classList.toggle('on', hideFilled); render(); return; }
+  filt = c.dataset.f;
+  document.querySelectorAll('#chips .chip[data-f]').forEach(x => x.classList.toggle('on', x===c));
+  render();
+};
+byId('sorts').onclick = e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  sort = c.dataset.s;
+  document.querySelectorAll('#sorts .chip').forEach(x => x.classList.toggle('on', x===c));
+  render();
+};
+byId('q').oninput = render;
+
+/* ---------- interactions ------------------------------------------------ */
+document.body.addEventListener('click', e => {
+  const del = e.target.closest('[data-del]');
+  if (del){ const k = decodeURIComponent(del.dataset.del);
+    if (confirm('Remove manual entry for '+S.sold[k].name+'?')){ delete S.sold[k]; save(); render(); } return; }
+
+  const btn = e.target.closest('.sale .btn');
+  if (btn){
+    const sale = btn.closest('.sale');
+    const name = decodeURIComponent(sale.dataset.n);
+    const price = parseFloat(sale.querySelector('input').value);
+    if (isNaN(price) || price < 0){ sale.querySelector('input').focus(); return; }
+    const rid = parseInt(sale.querySelector('select').value, 10);
+    S.sold[name] = {name: name, pos: BOARD[name].pos, price: price,
+                    roster: rid, source: 'manual'};
+    save(); open = null; render(); return;
+  }
+  const row = e.target.closest('.row');
+  if (row && row.dataset.n){
+    const name = decodeURIComponent(row.dataset.n);
+    if (S.sold[name]){
+      if (confirm('Undo sale of '+name+'?')){ delete S.sold[name]; save(); }
+      open = null; render(); return;
+    }
+    open = (open === row.dataset.u) ? null : row.dataset.u;
+    render();
+    if (open){ const i = byId('pr-'+open); if (i) i.focus(); }
+  }
+});
+
+byId('syncbtn').onclick = syncDraft;
+
+/* manual add form */
+byId('playerlist').innerHTML = DATA.map(p => '<option value="'+p.name+'">').join('');
+byId('m-team').innerHTML = teamOpts(MY);
+byId('m-name').oninput = () => {
+  const p = BOARD[byId('m-name').value];
+  if (p) byId('m-pos').value = p.pos;
+};
+byId('m-add').onclick = () => {
+  const nm = (byId('m-name').value || '').trim();
+  const price = parseFloat(byId('m-price').value);
+  if (!nm){ byId('m-name').focus(); return; }
+  if (isNaN(price) || price < 0){ byId('m-price').focus(); return; }
+  const key = BOARD[nm] ? nm : ('x:' + nm);
+  S.sold[key] = {name: nm, pos: byId('m-pos').value, price: price,
+                 roster: parseInt(byId('m-team').value, 10), source: 'manual'};
+  save();
+  byId('m-name').value = ''; byId('m-price').value = '';
+  render();
+};
+
+setPane('board');
+render();
+</script>
