@@ -638,6 +638,75 @@ function pace(){
           perSlot: slotsLeft() > 0 ? budgetLeft() / slotsLeft() : 0};
 }
 
+
+/* Room-level directives. These describe the DRAFT, not a player, so they
+   render even when nothing is selected — a hoarding warning you have to go
+   looking for is a warning you will miss. */
+function roomNotes(){
+  const out = [];
+  const cal = calibration();
+  if (cal && cal.med > 1.12)
+    out.push(['warn', 'The room is paying ' + Math.round((cal.med-1)*100)
+      + '% over our board (n=' + cal.n + '). You will lose most bidding wars — '
+      + 'pick your spots and win the ones you truly need.']);
+  else if (cal && cal.med < 0.9)
+    out.push(['clear', 'The room is paying ' + Math.round((1-cal.med)*100)
+      + '% under our board (n=' + cal.n + '). Slow down and buy later — '
+      + 'everything is on sale.']);
+
+  const run = positionRun();
+  if (run)
+    out.push(['info', 'A ' + run.pos + ' run is on (' + run.n + ' of the last '
+      + run.of + '). Buy the position nobody is chasing; come back to '
+      + run.pos + ' when it burns out.']);
+
+  const pc = pace();
+  if (pc && pc.slotShare - pc.spentShare > 0.25)
+    out.push(['warn', 'You have filled ' + Math.round(pc.slotShare*100)
+      + '% of your roster on only ' + Math.round(pc.spentShare*100)
+      + '% of your budget. Money you do not spend is worth nothing — '
+      + 'start winning lots.']);
+  else if (pc && pc.spentShare - pc.slotShare > 0.25)
+    out.push(['warn', 'You have spent ' + Math.round(pc.spentShare*100)
+      + '% of budget on ' + Math.round(pc.slotShare*100) + '% of your roster. '
+      + money(pc.perSlot) + '/slot left — bid on bargains only from here.']);
+
+  // positions where you are at risk of being shut out entirely
+  const n = rosterNeeds(MY);
+  for (const pos in n){
+    if (!n[pos]) continue;
+    const r = shutoutRisk(pos);
+    if (r.left <= r.needing)
+      out.push(['warn', 'Only ' + r.left + ' startable ' + pos + ' left for '
+        + r.needing + ' teams that need one. Get yours in the next few lots'
+        + (pos === 'QB' ? ' — the QB slot cannot be filled any other way.' : '.')]);
+  }
+  return out;
+}
+
+function roomVerdict(){
+  const pc = pace(), inf = inflation();
+  const n = rosterNeeds(MY);
+  const still = Object.keys(n).filter(k => n[k] > 0).map(k => k + n[k]).join(' ');
+  if (slotsLeft() <= 0) return ['info', 'ROSTER FULL', 'Nothing left to do but watch.'];
+  if (pc && pc.slotShare - pc.spentShare > 0.25)
+    return ['warn', 'SPEND — you are behind pace',
+      'You still owe ' + (still || 'depth') + ' and are sitting on '
+      + money(budgetLeft()) + '. Win the next lot you actually rate.'];
+  if (pc && pc.spentShare - pc.slotShare > 0.25)
+    return ['warn', 'BARGAINS ONLY — ' + money(pc.perSlot) + '/slot left',
+      'You are ahead of budget pace. Do not bid above our number again.'];
+  if (inf < 0.95)
+    return ['clear', 'WAIT — the room is cheap (' + inf.toFixed(2) + 'x)',
+      'Later lots clear under our board. Hold your money, still need ' + (still || 'depth') + '.'];
+  if (inf > 1.06)
+    return ['warn', 'BUY NOW — the room is rich (' + inf.toFixed(2) + 'x)',
+      'Money is chasing fewer players. Prices only go up from here; still need '
+      + (still || 'depth') + '.'];
+  return ['info', 'ON PLAN', money(budgetLeft()) + ' for ' + slotsLeft()
+    + ' slots. Still need ' + (still || 'depth') + '. Type a name for a verdict.'];
+}
+
 function readNotes(p){
   const out = [];
   const n = rosterNeeds(MY);
@@ -735,35 +804,8 @@ function readNotes(p){
                      : ' — fine, but plan your week ' + p.bye + ' cover.')]);
   }
 
-  // ---- room-level directives ------------------------------------------
-  if (cal && cal.med > 1.12)
-    out.push(['warn', 'The room is paying ' + Math.round((cal.med-1)*100)
-      + '% over our board (n=' + cal.n + '). You will lose most bidding wars — '
-      + 'pick your spots and win the ones you truly need.']);
-  else if (cal && cal.med < 0.9)
-    out.push(['clear', 'The room is paying ' + Math.round((1-cal.med)*100)
-      + '% under our board (n=' + cal.n + '). Slow down and buy later — '
-      + 'everything is on sale.']);
-
-  const run = positionRun();
-  if (run && run.pos === p.pos)
-    out.push(['warn', run.n + ' of the last ' + run.of + ' lots were ' + run.pos
-      + '. You are buying into a run — wait for it to burn out unless he is '
-      + 'the last of his tier.']);
-  else if (run)
-    out.push(['info', 'A ' + run.pos + ' run is on — everything else is '
-      + 'cheap right now. Buy the position nobody is chasing.']);
-
-  const pc = pace();
-  if (pc && pc.slotShare - pc.spentShare > 0.25)
-    out.push(['warn', 'You have filled ' + Math.round(pc.slotShare*100)
-      + '% of your roster on ' + Math.round(pc.spentShare*100)
-      + '% of your budget — you are hoarding. Money you do not spend is '
-      + 'worth nothing. Start winning lots.']);
-  else if (pc && pc.spentShare - pc.slotShare > 0.25)
-    out.push(['warn', 'You have spent ' + Math.round(pc.spentShare*100)
-      + '% of budget on ' + Math.round(pc.slotShare*100) + '% of your roster — '
-      + money(pc.perSlot) + '/slot left. Stop bidding on anyone but bargains.']);
+  // room-level directives, shared with the no-player view
+  roomNotes().forEach(x => out.push(x));
 
   return out;
 }
@@ -771,12 +813,28 @@ function readNotes(p){
 function renderRead(){
   const el = byId('read');
   const q = (byId('q').value || '').trim().toLowerCase();
-  if (q.length < 3){ el.classList.remove('on'); return; }
-  const hits = DATA.filter(p => p.name.toLowerCase().includes(q));
-  if (hits.length !== 1 || S.sold[hits[0].name]){ el.classList.remove('on'); return; }
-  const p = hits[0];
-  const myMax = Math.min(p.value * inflation(), maxLegal());
+  let p = null;
+  if (q.length >= 3){
+    const hits = DATA.filter(x => x.name.toLowerCase().includes(q));
+    if (hits.length === 1 && !S.sold[hits[0].name]) p = hits[0];
+  }
+  // practice: the nominated player is known here, so read him automatically
+  if (!p && SIM && typeof lot !== 'undefined' && lot) p = lot.p;
   el.classList.add('on');
+
+  if (!p){
+    const v = roomVerdict();
+    el.innerHTML = '<div class="rd-top"><div><div class="rd-nm">The Room</div>'
+      + '<div class="rd-mt">' + Object.keys(S.sold).length + ' sold &middot; '
+      + inflation().toFixed(2) + 'x inflation</div></div>'
+      + '<div class="rd-bid"><div class="v">' + money(budgetLeft()) + '</div>'
+      + '<div class="k">' + slotsLeft() + ' slots</div></div></div>'
+      + '<div class="rd-n ' + v[0] + ' hero"><b>' + v[1] + '</b><br>' + v[2] + '</div>'
+      + roomNotes().map(nt => '<div class="rd-n ' + nt[0] + '">' + nt[1] + '</div>').join('');
+    return;
+  }
+
+  const myMax = Math.min(p.value * inflation(), maxLegal());
   el.innerHTML = '<div class="rd-top"><div><div class="rd-nm">' + p.name + '</div>'
     + '<div class="rd-mt">' + p.pos + ' &middot; ' + p.team + ' &middot; tier '
     + (p.tier || '-') + (p.bye ? ' &middot; bye ' + p.bye : '')
