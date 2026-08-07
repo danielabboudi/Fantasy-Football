@@ -94,6 +94,11 @@ h1 span.t{color:var(--ink)}
 input,select{font-family:inherit;font-size:13px;font-weight:500;padding:10px 12px;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--ink);width:100%}
 input::placeholder{color:var(--muted)}
+/* the lookup must survive scrolling — see patch note */
+.searchwrap{position:sticky;top:0;z-index:6;background:var(--white);
+  padding:2px 0 9px;margin:-2px 0 0}
+.searchwrap input{font-size:14px;font-weight:600}
+@media (min-width:820px){ .searchwrap{top:0} }
 label.f{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted);margin:0 0 4px 2px}
 .frow{display:grid;gap:9px;margin-bottom:10px}
@@ -232,7 +237,9 @@ nav.bottom-nav button.active::before{content:'';position:absolute;top:0;left:30%
             <div class="head-l"><span class="slash"></span><h2>Draft Board</h2></div>
             <span class="count" id="c-board">—</span>
           </div>
-          <input id="q" placeholder="Search player…" autocomplete="off" style="margin-bottom:9px">
+          <div class="searchwrap">
+            <input id="q" placeholder="Who is on the block?" autocomplete="off">
+          </div>
           <div class="chips" id="chips"></div>
           <div class="chips" id="sorts"></div>
           <div id="board"></div>
@@ -670,6 +677,7 @@ byId('sorts').onclick = e => {
   render();
 };
 byId('q').oninput = render;
+byId('q').onfocus = function(){ this.select(); };
 
 /* ---------- interactions ------------------------------------------------ */
 /* team roster popout — same view My Roster gives, for any of the 18 */
