@@ -571,28 +571,22 @@ function rowHTML(p, i, pane){
 
 
 /* ---------------------------------------------------------------------
-   THE READ — deterministic notes about the player on the block.
-   Every line is arithmetic over state we already hold. No model, on
-   purpose: it must answer inside a 60-second bid clock, work with no
-   network, and never invent a number.
-   --------------------------------------------------------------------- */
+   THE READ — plain English only.
 
-/* ---------------------------------------------------------------------
-   THE READ — a verdict and an instruction, not a briefing.
+   Danny executes this under a 60-second clock. Every line has to be
+   understood on first read with no interpretation, so:
+     - no auction jargon: no "lots", "clears", "the board", "market",
+       "inflation", "tier", "surplus", "pace", "startable"
+     - say players, price, what he's worth, what others will pay
+     - every line ends in something to DO
+     - numbers always, never "some" or "several"
 
-   Danny drafts by pressing buttons; this has to tell him which button.
-   So every lot resolves to ONE headline directive (BID TO $x / STRETCH /
-   LET HIM GO / PASS / MUST WIN) and the supporting lines each end in an
-   action, never in a fact he has to interpret.
+   Still pure arithmetic over state we hold. No model — it has to answer
+   inside the clock, from a public page with no key, and never invent
+   a number.
 
-   All of it is arithmetic over state we already hold. No model: it has to
-   answer inside a 60-second bid clock, from a public page with no key, and
-   must never invent a number.
-
-   KNOWN ASSUMPTION, stated once: rival needs use MIN_ROSTER as a proxy for
-   what other managers consider a viable roster. Their real intentions are
-   unknowable, so "still needs RB" means "has fewer RBs than a minimum
-   viable roster", not "wants one".
+   Assumption stated once: what rivals "need" is inferred from a minimum
+   sensible roster (2 QB, 4 RB, 5 WR, 1 TE), not from anything they've said.
    --------------------------------------------------------------------- */
 function calibration(){
   const rel = LOG.filter(l => l.value >= 5).map(l => l.price / l.value);
@@ -601,9 +595,6 @@ function calibration(){
   return {n: rel.length, med: sorted[Math.floor(sorted.length/2)]};
 }
 function positionRun(){
-  // A run is a position clearing FASTER than its share of the pool, not
-  // simply appearing often — WRs are ~a quarter of the board, so four WRs
-  // in eight lots is normal and four TEs is not.
   const recent = LOG.slice(0, 8);
   if (recent.length < 6) return null;
   const pool = DATA.filter(p => p.rostered && !S.sold[p.name]);
@@ -629,184 +620,197 @@ function shutoutRisk(pos){
   return {left: left, needing: needing};
 }
 function pace(){
-  // Are we banking money we will never get to spend?
   const filled = LG.roster_size - slotsLeft();
   if (filled < 3) return null;
-  const spentShare = (LG.budget - budgetLeft()) / LG.budget;
-  const slotShare = filled / LG.roster_size;
-  return {spentShare: spentShare, slotShare: slotShare,
+  return {spentShare: (LG.budget - budgetLeft()) / LG.budget,
+          slotShare: filled / LG.roster_size,
           perSlot: slotsLeft() > 0 ? budgetLeft() / slotsLeft() : 0};
 }
+function stillNeed(){
+  const n = rosterNeeds(MY);
+  const bits = [];
+  for (const k in n) if (n[k] > 0) bits.push(n[k] + ' ' + k);
+  return bits.length ? bits.join(', ') : 'nothing specific';
+}
 
-
-/* Room-level directives. These describe the DRAFT, not a player, so they
-   render even when nothing is selected — a hoarding warning you have to go
-   looking for is a warning you will miss. */
+/* ---- room-level: what's happening around you ------------------------- */
 function roomNotes(){
   const out = [];
   const cal = calibration();
   if (cal && cal.med > 1.12)
-    out.push(['warn', 'The room is paying ' + Math.round((cal.med-1)*100)
-      + '% over our board (n=' + cal.n + '). You will lose most bidding wars — '
-      + 'pick your spots and win the ones you truly need.']);
+    out.push(['warn', 'Other teams are paying about '
+      + Math.round((cal.med-1)*100) + '% more than players are worth. '
+      + 'You will lose most bidding wars, so only fight for players you '
+      + 'really need.']);
   else if (cal && cal.med < 0.9)
-    out.push(['clear', 'The room is paying ' + Math.round((1-cal.med)*100)
-      + '% under our board (n=' + cal.n + '). Slow down and buy later — '
-      + 'everything is on sale.']);
+    out.push(['clear', 'Players are selling for about '
+      + Math.round((1-cal.med)*100) + '% less than they are worth. '
+      + 'Keep waiting — you will get more for your money later.']);
 
   const run = positionRun();
   if (run)
-    out.push(['info', 'A ' + run.pos + ' run is on (' + run.n + ' of the last '
-      + run.of + '). Buy the position nobody is chasing; come back to '
-      + run.pos + ' when it burns out.']);
+    out.push(['info', 'Everyone is buying ' + run.pos + 's right now ('
+      + run.n + ' of the last ' + run.of + ' players sold). That makes '
+      + run.pos + 's expensive. Buy a different position while they are busy.']);
 
   const pc = pace();
   if (pc && pc.slotShare - pc.spentShare > 0.25)
     out.push(['warn', 'You have filled ' + Math.round(pc.slotShare*100)
-      + '% of your roster on only ' + Math.round(pc.spentShare*100)
-      + '% of your budget. Money you do not spend is worth nothing — '
-      + 'start winning lots.']);
+      + '% of your team but only spent ' + Math.round(pc.spentShare*100)
+      + '% of your money. You cannot keep leftover money, so start winning '
+      + 'players you actually want.']);
   else if (pc && pc.spentShare - pc.slotShare > 0.25)
     out.push(['warn', 'You have spent ' + Math.round(pc.spentShare*100)
-      + '% of budget on ' + Math.round(pc.slotShare*100) + '% of your roster. '
-      + money(pc.perSlot) + '/slot left — bid on bargains only from here.']);
+      + '% of your money and filled only ' + Math.round(pc.slotShare*100)
+      + '% of your team. That leaves about ' + money(pc.perSlot)
+      + ' per open spot. Only bid on cheap players from now on.']);
 
-  // positions where you are at risk of being shut out entirely
   const n = rosterNeeds(MY);
   for (const pos in n){
     if (!n[pos]) continue;
     const r = shutoutRisk(pos);
     if (r.left <= r.needing)
-      out.push(['warn', 'Only ' + r.left + ' startable ' + pos + ' left for '
-        + r.needing + ' teams that need one. Get yours in the next few lots'
-        + (pos === 'QB' ? ' — the QB slot cannot be filled any other way.' : '.')]);
+      out.push(['warn', 'Only ' + r.left + ' ' + pos + 's worth starting are '
+        + 'left, and ' + r.needing + ' teams still need one. Get yours soon or '
+        + 'you may not get one at all'
+        + (pos === 'QB' ? ', and you have to start a QB every week.' : '.')]);
   }
   return out;
 }
 
 function roomVerdict(){
   const pc = pace(), inf = inflation();
-  const n = rosterNeeds(MY);
-  const still = Object.keys(n).filter(k => n[k] > 0).map(k => k + n[k]).join(' ');
-  if (slotsLeft() <= 0) return ['info', 'ROSTER FULL', 'Nothing left to do but watch.'];
+  if (slotsLeft() <= 0)
+    return ['info', 'YOUR TEAM IS FULL', 'Nothing left to buy. Sit back.'];
   if (pc && pc.slotShare - pc.spentShare > 0.25)
-    return ['warn', 'SPEND — you are behind pace',
-      'You still owe ' + (still || 'depth') + ' and are sitting on '
-      + money(budgetLeft()) + '. Win the next lot you actually rate.'];
+    return ['warn', 'YOU ARE NOT SPENDING ENOUGH',
+      'You have ' + money(budgetLeft()) + ' left and still need '
+      + stillNeed() + '. Leftover money is wasted, so win the next player '
+      + 'you actually rate.'];
   if (pc && pc.spentShare - pc.slotShare > 0.25)
-    return ['warn', 'BARGAINS ONLY — ' + money(pc.perSlot) + '/slot left',
-      'You are ahead of budget pace. Do not bid above our number again.'];
+    return ['warn', 'ONLY BUY CHEAP PLAYERS NOW',
+      'You have ' + money(budgetLeft()) + ' for ' + slotsLeft()
+      + ' open spots, about ' + money(pc.perSlot) + ' each. Do not pay more '
+      + 'than our price for anyone.'];
   if (inf < 0.95)
-    return ['clear', 'WAIT — the room is cheap (' + inf.toFixed(2) + 'x)',
-      'Later lots clear under our board. Hold your money, still need ' + (still || 'depth') + '.'];
+    return ['clear', 'WAIT AND SAVE YOUR MONEY',
+      'Players are selling for less than they are worth right now, so the '
+      + 'same money buys more if you wait. You still need ' + stillNeed() + '.'];
   if (inf > 1.06)
-    return ['warn', 'BUY NOW — the room is rich (' + inf.toFixed(2) + 'x)',
-      'Money is chasing fewer players. Prices only go up from here; still need '
-      + (still || 'depth') + '.'];
-  return ['info', 'ON PLAN', money(budgetLeft()) + ' for ' + slotsLeft()
-    + ' slots. Still need ' + (still || 'depth') + '. Type a name for a verdict.'];
+    return ['warn', 'START SPENDING NOW',
+      'Teams still have plenty of money left and there are fewer good players, so '
+      + 'prices are only going up. You still need ' + stillNeed() + '.'];
+  return ['info', 'YOU ARE ON TRACK',
+    money(budgetLeft()) + ' left for ' + slotsLeft() + ' spots. You still need '
+    + stillNeed() + '. Type a player name to see what to bid.'];
 }
 
+/* ---- player-level: what to do about the guy on the block -------------- */
 function readNotes(p){
   const out = [];
   const n = rosterNeeds(MY);
   const need = (n[p.pos] || 0) > 0;
   const myMax = Math.min(p.value * inflation(), maxLegal());
-  const cal = calibration();
 
-  // ---- competition -----------------------------------------------------
   const live = ROSTERS.filter(r => r.roster_id !== MY
     && slotsOfR(r.roster_id) > 0 && maxOfR(r.roster_id) >= p.value);
   const needing = live.filter(r => (rosterNeeds(r.roster_id)[p.pos] || 0) > 0);
 
-  // ---- tier position ---------------------------------------------------
-  // exclude the player on the block: what matters is what is left AFTER him
   const others = DATA.filter(x => x.pos === p.pos && x.tier === p.tier
     && x.name !== p.name && !S.sold[x.name]);
   const below = DATA.filter(x => x.pos === p.pos && x.tier > p.tier
     && !S.sold[x.name]).sort((a,b) => b.value - a.value)[0];
-  const cliff = below ? p.value - below.value : 0;
-  const lastOfTier = others.length === 0 && below;
+  const drop = below ? p.value - below.value : 0;
+  const lastGood = others.length === 0 && below;
 
   const risk = shutoutRisk(p.pos);
-  const mandatory = p.pos === 'QB';
+  const mustStart = p.pos === 'QB';
   const shutout = need && risk.left <= risk.needing;
 
-  // ---- THE VERDICT -----------------------------------------------------
   let verdict, level, sub;
   if (!need && slotsLeft() <= 3){
-    verdict = 'PASS'; level = 'warn';
-    sub = 'You need ' + (Object.keys(n).filter(k=>n[k]>0).join('/') || 'nothing')
-      + ' and have ' + slotsLeft() + ' slots. Do not spend here.';
-  } else if (shutout && mandatory){
-    // Scarcity justifies paying OVER value, never paying everything. Going to
-    // maxLegal() would hand the whole budget to one QB and leave $1 a slot for
-    // the rest of the roster — a worse outcome than the empty slot it avoids.
+    verdict = 'DO NOT BID'; level = 'warn';
+    sub = 'You do not need another ' + p.pos + ' and only have ' + slotsLeft()
+      + ' spots left. Save the money for ' + stillNeed() + '.';
+  } else if (shutout && mustStart){
     const emergency = Math.min(myMax * 1.4, maxLegal(),
                                budgetLeft() - Math.max(0, slotsLeft() - 1) * 3);
-    verdict = 'MUST WIN — up to ' + money(Math.max(myMax, emergency));
+    const cap = Math.max(myMax, emergency);
+    verdict = 'YOU NEED TO WIN THIS ONE — GO UP TO ' + money(cap);
     level = 'warn';
-    sub = 'Only ' + risk.left + ' startable QBs left for ' + risk.needing
-      + ' teams that need one, and the QB slot cannot be filled any other way. '
-      + 'Pay over the odds here, but stop at ' + money(Math.max(myMax, emergency))
-      + ' — you still owe ' + Math.max(0, slotsLeft()-1) + ' more slots.';
+    sub = 'Only ' + risk.left + ' QBs worth starting are left and ' + risk.needing
+      + ' teams still need one. You have to start a QB every week and there is '
+      + 'no other way to fill that spot. Pay over the odds, but stop at '
+      + money(cap) + ' — you still have ' + Math.max(0, slotsLeft()-1)
+      + ' more spots to fill.';
   } else if (p.price > p.value * 1.3){
-    verdict = 'LET HIM GO'; level = 'warn';
-    sub = 'Market pays ~' + money(p.price) + '; he is worth ' + money(p.value)
-      + ' to us. Let someone else overpay and take the next tier.';
-  } else if (need && lastOfTier && cliff >= 6){
-    const stretch = Math.min(myMax + Math.min(cliff, p.value * 0.15), maxLegal());
-    verdict = 'STRETCH — up to ' + money(stretch); level = 'clear';
-    sub = 'Last of ' + p.pos + ' tier ' + p.tier + '; the next man is '
-      + money(cliff) + ' worse. Paying a few dollars over beats the drop.';
+    verdict = 'DO NOT BID — LET SOMEONE ELSE HAVE HIM'; level = 'warn';
+    sub = 'Other teams will pay around ' + money(p.price) + ' for him. He is '
+      + 'only worth ' + money(p.value) + ' to us. Save the money and take the '
+      + 'next player instead.';
+  } else if (need && lastGood && drop >= 6){
+    const stretch = Math.min(myMax + Math.min(drop, p.value * 0.15), maxLegal());
+    verdict = 'WORTH OVERPAYING — GO UP TO ' + money(stretch); level = 'clear';
+    sub = 'He is the last good ' + p.pos + ' at this level. The next best is '
+      + below.name + ', who is ' + money(drop) + ' worse. Paying a few dollars '
+      + 'extra beats dropping down to him.';
   } else if (!need){
-    verdict = 'ONLY AT A DISCOUNT — under ' + money(myMax * 0.8); level = 'info';
-    sub = 'You do not need ' + p.pos + '. He is a flex upgrade, so buy only '
-      + 'if the room lets him go cheap.';
+    verdict = 'ONLY BID IF HE GOES CHEAP — under ' + money(myMax * 0.8);
+    level = 'info';
+    sub = 'You do not need another ' + p.pos + '. He would just sit on '
+      + 'your bench, so only take him if nobody else wants him.';
   } else {
-    verdict = 'BID TO ' + money(myMax); level = 'clear';
-    sub = 'Fills ' + p.pos + ' (x' + n[p.pos] + ' still open). Nudge a dollar '
-      + 'at a time and stop at ' + money(myMax) + '.';
+    verdict = 'BID UP TO ' + money(myMax); level = 'clear';
+    sub = 'You still need ' + n[p.pos] + ' more ' + p.pos + '. Raise one dollar '
+      + 'at a time and stop at ' + money(myMax) + '. Do not go higher.';
   }
   out.push([level, '<b>' + verdict + '</b><br>' + sub, true]);
 
-  // ---- supporting instructions ----------------------------------------
   if (!live.length)
-    out.push(['clear', 'Nobody else can afford ' + money(p.value)
-      + ' — open at $1 and let it sit. Do not bid against yourself.']);
+    out.push(['clear', 'No other team can afford him. Open at $1 and let it '
+      + 'sit — do not raise your own bid.']);
   else if (needing.length === 0)
-    out.push(['clear', live.length + ' rivals could afford him but none need '
-      + p.pos + ' — expect a soft market, start low.']);
+    out.push(['clear', live.length + ' teams could afford him but none of them '
+      + 'need a ' + p.pos + '. Start low, you will probably get him cheap.']);
   else
     out.push([needing.length >= 4 ? 'warn' : 'info',
-      needing.length + ' rival' + (needing.length===1?'':'s')
-      + ' both need ' + p.pos + ' and can pay ('
+      needing.length + ' other team' + (needing.length===1?'':'s')
+      + ' need a ' + p.pos + ' and can afford him ('
       + needing.slice(0,3).map(r => r.name).join(', ')
-      + (needing.length>3 ? ', +' + (needing.length-3) : '')
-      + ') — ' + (needing.length >= 4
-          ? 'expect a fight; do not chase past your number.'
-          : 'bid patiently, you can win this one.')]);
+      + (needing.length>3 ? ' and ' + (needing.length-3) + ' more' : '')
+      + '). ' + (needing.length >= 4
+          ? 'Expect a real fight. Still stop at your number.'
+          : 'Bid patiently, you can win this one.')]);
 
   if (others.length && below)
-    out.push(['info', others.length + ' more in this tier after him — '
-      + 'losing him costs you nothing, take the next one.']);
-  else if (lastOfTier)
-    out.push(['warn', 'Last in tier ' + p.tier + '. Next best is ' + below.name
-      + ' at ' + money(below.value) + ' — that is your fallback, know it now.']);
+    out.push(['info', 'There are ' + others.length + ' more ' + p.pos
+      + 's about as good as him still available. If you lose him, take one of '
+      + 'those instead — do not overpay here.']);
+  else if (lastGood)
+    out.push(['warn', 'He is the last good one at this level. If you lose him, '
+      + 'the next best is ' + below.name + ' at ' + money(below.value)
+      + ', which is ' + money(drop) + ' worse. Know that before you stop bidding.']);
 
   if (p.bye){
     const clash = mineRecs().filter(s => s.pos === p.pos
       && (BOARD[s.name] || {}).bye === p.bye);
     if (clash.length)
-      out.push(['warn', 'Shares bye week ' + p.bye + ' with '
-        + clash.map(s => s.name).join(', ')
-        + (mandatory ? ' — that leaves an empty QB slot. Avoid unless you plan to fix it.'
-                     : ' — fine, but plan your week ' + p.bye + ' cover.')]);
+      out.push(['warn', 'He is off in week ' + p.bye + ', the same week as '
+        + clash.map(s => s.name).join(' and ')
+        + (mustStart ? '. You would have no QB at all that week. Avoid him '
+                     + 'unless you plan to fix it later.'
+                     : '. You will need someone else to cover week ' + p.bye + '.')]);
   }
 
-  // room-level directives, shared with the no-player view
-  roomNotes().forEach(x => out.push(x));
+  const afterPay = budgetLeft() - Math.round(myMax);
+  const slotsAfter = slotsLeft() - 1;
+  if (slotsAfter > 0)
+    out.push([afterPay < slotsAfter * 2 ? 'warn' : 'info',
+      'If you pay ' + money(myMax) + ' you will have ' + money(afterPay)
+      + ' left for ' + slotsAfter + ' more spots, about '
+      + money(afterPay / slotsAfter) + ' each.']);
 
+  roomNotes().forEach(x => out.push(x));
   return out;
 }
 
@@ -818,17 +822,16 @@ function renderRead(){
     const hits = DATA.filter(x => x.name.toLowerCase().includes(q));
     if (hits.length === 1 && !S.sold[hits[0].name]) p = hits[0];
   }
-  // practice: the nominated player is known here, so read him automatically
   if (!p && SIM && typeof lot !== 'undefined' && lot) p = lot.p;
   el.classList.add('on');
 
   if (!p){
     const v = roomVerdict();
-    el.innerHTML = '<div class="rd-top"><div><div class="rd-nm">The Room</div>'
-      + '<div class="rd-mt">' + Object.keys(S.sold).length + ' sold &middot; '
-      + inflation().toFixed(2) + 'x inflation</div></div>'
+    el.innerHTML = '<div class="rd-top"><div><div class="rd-nm">Where you stand</div>'
+      + '<div class="rd-mt">' + Object.keys(S.sold).length + ' players sold so far'
+      + '</div></div>'
       + '<div class="rd-bid"><div class="v">' + money(budgetLeft()) + '</div>'
-      + '<div class="k">' + slotsLeft() + ' slots</div></div></div>'
+      + '<div class="k">' + slotsLeft() + ' spots left</div></div></div>'
       + '<div class="rd-n ' + v[0] + ' hero"><b>' + v[1] + '</b><br>' + v[2] + '</div>'
       + roomNotes().map(nt => '<div class="rd-n ' + nt[0] + '">' + nt[1] + '</div>').join('');
     return;
@@ -836,11 +839,11 @@ function renderRead(){
 
   const myMax = Math.min(p.value * inflation(), maxLegal());
   el.innerHTML = '<div class="rd-top"><div><div class="rd-nm">' + p.name + '</div>'
-    + '<div class="rd-mt">' + p.pos + ' &middot; ' + p.team + ' &middot; tier '
-    + (p.tier || '-') + (p.bye ? ' &middot; bye ' + p.bye : '')
-    + ' &middot; mkt ' + money(p.price) + '</div></div>'
+    + '<div class="rd-mt">' + p.pos + ' &middot; ' + p.team
+    + (p.bye ? ' &middot; off in week ' + p.bye : '')
+    + ' &middot; others will pay about ' + money(p.price) + '</div></div>'
     + '<div class="rd-bid"><div class="v">' + money(myMax) + '</div>'
-    + '<div class="k">your max</div></div></div>'
+    + '<div class="k">bid up to</div></div></div>'
     + readNotes(p).map(nt => '<div class="rd-n ' + nt[0]
         + (nt[2] ? ' hero' : '') + '">' + nt[1] + '</div>').join('');
 }
