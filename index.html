@@ -95,6 +95,20 @@ input,select{font-family:inherit;font-size:13px;font-weight:500;padding:10px 12p
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--ink);width:100%}
 input::placeholder{color:var(--muted)}
 /* the lookup must survive scrolling — see patch note */
+.read{display:none;background:var(--raised);border:1px solid var(--border);
+  border-radius:var(--r-md);padding:12px;margin-bottom:10px}
+.read.on{display:block}
+.rd-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:9px}
+.rd-nm{font-size:15px;font-weight:800;letter-spacing:-.02em}
+.rd-mt{font-size:11px;color:var(--muted);margin-top:1px}
+.rd-bid{text-align:right;flex:0 0 auto}
+.rd-bid .v{font-size:17px;font-weight:800;letter-spacing:-.02em}
+.rd-bid .k{font-size:9.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.rd-n{font-size:11.5px;font-weight:500;line-height:1.45;padding:5px 0 5px 11px;
+  border-left:2px solid var(--border);margin-bottom:3px}
+.rd-n.clear{border-color:var(--pos-t)}
+.rd-n.warn{border-color:var(--amber-t)}
+.rd-n.info{border-color:var(--slate-mid)}
 .searchwrap{position:sticky;top:0;z-index:6;background:var(--white);
   padding:2px 0 9px;margin:-2px 0 0}
 .searchwrap input{font-size:14px;font-weight:600}
@@ -237,6 +251,7 @@ nav.bottom-nav button.active::before{content:'';position:absolute;top:0;left:30%
             <div class="head-l"><span class="slash"></span><h2>Draft Board</h2></div>
             <span class="count" id="c-board">—</span>
           </div>
+          <div id="read" class="read"></div>
           <div class="searchwrap">
             <input id="q" placeholder="Who is on the block?" autocomplete="off">
           </div>
@@ -399,6 +414,13 @@ const budgetLeft = () => LG.budget - spent();
 const slotsLeft = () => LG.roster_size - mineRecs().length;
 const maxLegal = () => Math.max(1, budgetLeft() - (slotsLeft() - 1));
 
+const slotsOfR = rid => LG.roster_size -
+  Object.values(S.sold).filter(s => s.roster === rid).length;
+const leftOfR = rid => LG.budget -
+  Object.values(S.sold).filter(s => s.roster === rid)
+    .reduce((a, s) => a + s.price, 0);
+const maxOfR = rid => Math.max(1, leftOfR(rid) - (slotsOfR(rid) - 1));
+
 function rosterSpent(rid){
   return Object.values(S.sold).filter(s => s.roster === rid)
     .reduce((a,s) => a + s.price, 0);
@@ -543,6 +565,99 @@ function rowHTML(p, i, pane){
     + '<div class="rec">your max <b>'+money(maxBid(p))+'</b> · market '+money(p.price)+'</div></div>';
 }
 
+
+/* ---------------------------------------------------------------------
+   THE READ — deterministic notes about the player on the block.
+   Every line is arithmetic over state we already hold. No model, on
+   purpose: it must answer inside a 60-second bid clock, work with no
+   network, and never invent a number.
+   --------------------------------------------------------------------- */
+function readNotes(p){
+  const out = [];
+  const price = p.value;
+
+  // who can actually come after him
+  const live = ROSTERS.filter(r => r.roster_id !== MY
+    && slotsOfR(r.roster_id) > 0 && maxOfR(r.roster_id) >= price);
+  const needing = live.filter(r => (rosterNeeds(r.roster_id)[p.pos] || 0) > 0);
+  if (!live.length){
+    out.push(['clear', 'Nobody else can afford ' + money(price)
+      + ' — he should come at or near the minimum.']);
+  } else {
+    out.push([needing.length <= 2 ? 'clear' : 'warn',
+      live.length + ' team' + (live.length===1?'':'s') + ' can afford '
+      + money(price) + ', ' + needing.length + ' of them still need '
+      + p.pos + (needing.length ? ': ' + needing.slice(0,3)
+        .map(r => r.name).join(', ') : '')]);
+  }
+
+  // tier scarcity and the cliff behind him
+  const sameTier = DATA.filter(x => x.pos === p.pos && x.tier === p.tier
+    && !S.sold[x.name]);
+  const below = DATA.filter(x => x.pos === p.pos && x.tier > p.tier
+    && !S.sold[x.name]).sort((a,b) => b.value - a.value)[0];
+  if (sameTier.length <= 3 && below){
+    out.push(['warn', 'Only ' + sameTier.length + ' left in ' + p.pos
+      + ' tier ' + p.tier + '; next tier starts ' + money(p.value - below.value)
+      + ' lower (' + below.name + ').']);
+  } else if (below){
+    out.push(['info', sameTier.length + ' left in this tier — the drop to tier '
+      + below.tier + ' is ' + money(p.value - below.value) + '.']);
+  }
+
+  // what he does to you
+  const n = rosterNeeds(MY);
+  const after = budgetLeft() - price;
+  const slotsAfter = slotsLeft() - 1;
+  if ((n[p.pos] || 0) > 0)
+    out.push(['clear', 'Fills a slot you still need (' + p.pos + ' x'
+      + n[p.pos] + ' outstanding).']);
+  else
+    out.push(['info', 'You do not need ' + p.pos
+      + ' — he only competes for your flex.']);
+  if (slotsAfter > 0)
+    out.push([after < slotsAfter * 2 ? 'warn' : 'info',
+      'At ' + money(price) + ' you would have ' + money(after) + ' for '
+      + slotsAfter + ' more slots (' + money(after / slotsAfter) + ' each).']);
+
+  // bye clash at the same position
+  if (p.bye){
+    const clash = mineRecs().filter(s => s.pos === p.pos
+      && (BOARD[s.name] || {}).bye === p.bye);
+    if (clash.length)
+      out.push(['warn', 'Same bye (week ' + p.bye + ') as '
+        + clash.map(s => s.name).join(', ') + '.']);
+  }
+
+  // the room's temperature
+  const inf = inflation();
+  if (inf < 0.95)
+    out.push(['clear', 'Room is running cheap (' + inf.toFixed(2)
+      + 'x) — later lots should clear under our numbers. Patience pays.']);
+  else if (inf > 1.06)
+    out.push(['warn', 'Room is rich (' + inf.toFixed(2)
+      + 'x) — money is chasing fewer players. Spend now, not later.']);
+
+  return out;
+}
+
+function renderRead(){
+  const el = byId('read');
+  const q = (byId('q').value || '').trim().toLowerCase();
+  if (q.length < 3){ el.classList.remove('on'); return; }
+  const hits = DATA.filter(p => p.name.toLowerCase().includes(q));
+  if (hits.length !== 1 || S.sold[hits[0].name]){ el.classList.remove('on'); return; }
+  const p = hits[0];
+  const rec = Math.min(p.value * inflation(), maxLegal());
+  el.classList.add('on');
+  el.innerHTML = '<div class="rd-top"><div><div class="rd-nm">' + p.name + '</div>'
+    + '<div class="rd-mt">' + p.pos + ' &middot; ' + p.team + ' &middot; tier '
+    + (p.tier || '-') + (p.bye ? ' &middot; bye ' + p.bye : '') + '</div></div>'
+    + '<div class="rd-bid"><div class="v">' + money(rec) + '</div>'
+    + '<div class="k">your max</div></div></div>'
+    + readNotes(p).map(nt => '<div class="rd-n ' + nt[0] + '">' + nt[1] + '</div>').join('');
+}
+
 function render(){
   byId('subline').textContent = LG.name + ' · ' + LG.teams + 'tm superflex · $' + LG.budget + ' auction';
   byId('s-budget').textContent = money(budgetLeft());
@@ -628,6 +743,7 @@ function render(){
       + (d<=0?'under ':'over ')+money(Math.abs(d))+'</span></div>';
   }).join('') : '<div class="empty">Nothing sold yet</div>';
 
+  renderRead();
   if (SIM) renderLot();
   if (open){ const el = byId('sale-'+open); if (el) el.classList.add('on'); }
   if (lastSync && !syncErr) {
@@ -812,12 +928,6 @@ byId('m-add').onclick = () => {
 const MODES = {normal:[0.88,1.12], hot:[1.05,1.35], cold:[0.72,0.95]};
 let MODE='normal', bots={}, lot=null, seed=20260830, nomIdx=0;
 function rnd(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
-
-const slotsOfR = rid => LG.roster_size -
-  Object.values(S.sold).filter(s=>s.roster===rid).length;
-const leftOfR = rid => LG.budget -
-  Object.values(S.sold).filter(s=>s.roster===rid).reduce((a,s)=>a+s.price,0);
-const maxOfR = rid => Math.max(1, leftOfR(rid)-(slotsOfR(rid)-1));
 
 function seatBots(){
   const m=MODES[MODE], lo=m[0], hi=m[1];
