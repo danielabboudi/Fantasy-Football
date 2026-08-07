@@ -766,12 +766,21 @@ byId('m-add').onclick = () => {
 };
 
 /* ----------------------------------------------------------------
-   SIMULATOR MODE. Same page, same numbers, bots instead of a real room —
-   so practice transfers directly to draft night.
-   Bots value from EXPECTED PRICE, not our board: our edge only means
-   something if it survives people who do not share our numbers.
-   Clearing is second price + $1, which is where an ascending auction
-   actually stops — one increment above the last rival still bidding.
+   SIMULATOR MODE — a real ASCENDING auction, not a sealed max.
+
+   The first version asked for one number and settled instantly. The maths
+   was right (you end up paying about one increment over the last rival) but
+   it taught nothing, because the whole skill of an auction is the climb:
+   watching the price rise, seeing who is still in, and deciding at each step
+   whether the next dollar is still worth it.
+
+   So the price now walks up. Bots bid each other out first, then it is you
+   against the last rival, one raise at a time.
+
+   IMPORTANT AND DELIBERATE: your bid stands exactly as entered. Jump to $60
+   when the last rival would have quit at $41 and you pay $60, not $42 —
+   which is precisely how Sleeper behaves and why nudging is cheaper than
+   jumping. The old model hid that cost entirely.
    ---------------------------------------------------------------- */
 const MODES = {normal:[0.88,1.12], hot:[1.05,1.35], cold:[0.72,0.95]};
 let MODE='normal', bots={}, lot=null, seed=20260830, nomIdx=0;
@@ -792,9 +801,9 @@ function simInit(){
   seed=20260830; nomIdx=0; S={sold:{},passed:{}}; LOG=[];
   seatBots(); save(); nextLot(); render();
 }
-function botBid(rid,p){
+function botMax(rid,p){
   const b=bots[rid]; if(!b) return 0;
-  if (slotsOfR(rid)<=0) return 0;   // a full roster must never bid
+  if (slotsOfR(rid)<=0) return 0;         // a full roster never bids
   const cap=maxOfR(rid); if(cap<=1) return 0;
   const nd=rosterNeeds(rid);
   let tot=0; for(const k in nd) tot+=nd[k];
@@ -804,6 +813,8 @@ function botBid(rid,p){
   if (slotsOfR(rid)<=3 && !nd[p.pos]) v*=0.5;
   return Math.min(Math.round(v), cap);
 }
+
+/* Open a lot: bots bid each other out, leaving one leader and a live price. */
 function nextLot(){
   S.passed = S.passed || {};
   const pool=DATA.filter(p=>p.rostered && !S.sold[p.name] && !S.passed[p.name]);
@@ -813,26 +824,57 @@ function nextLot(){
   if (nominator===MY) pick=pool.slice().sort((a,b)=>b.surplus-a.surplus)[0];
   else { const top=pool.slice().sort((a,b)=>b.price-a.price).slice(0,14);
          pick=top[Math.floor(rnd()*top.length)]; }
-  lot={p:pick, nominator:nominator};
-}
-function simResolve(myBid){
-  if(!lot) return;
-  const p=lot.p, bids=[];
+
+  const rivals=[];
   ROSTERS.forEach(r=>{ if(r.roster_id===MY) return;
-    const b=botBid(r.roster_id,p); if(b>1) bids.push({rid:r.roster_id,bid:b}); });
-  if (myBid>1 && slotsOfR(MY)>0) bids.push({rid:MY,bid:myBid});
-  if(!bids.length){
+    const m=botMax(r.roster_id,pick); if(m>1) rivals.push({rid:r.roster_id,max:m}); });
+  rivals.sort((a,b)=>b.max-a.max);
+
+  let price, leader;
+  if (!rivals.length){ price=1; leader=null; }
+  else if (rivals.length===1){ price=1; leader=rivals[0].rid; }
+  else { price=Math.min(rivals[0].max, rivals[1].max+1); leader=rivals[0].rid; }
+
+  lot={p:pick, nominator:nominator, rivals:rivals, price:price, leader:leader,
+       history:[]};
+}
+
+/* You raise. The last rival counters by one if it is still under his max. */
+function userBid(amount){
+  if(!lot) return;
+  const bid=Math.round(amount);
+  if (slotsOfR(MY)<=0) return;
+  if (bid<=lot.price && lot.leader!==null) return;   // must beat the standing bid
+  if (bid>maxLegal()) return;
+
+  lot.history.push({who:'you', price:bid});
+  lot.price=bid; lot.leader=MY;
+
+  // the strongest rival still able to go above your bid counters at +1
+  const counter=lot.rivals.filter(r=>r.rid!==MY && r.max>bid)
+                          .sort((a,b)=>b.max-a.max)[0];
+  if (counter){
+    lot.price=bid+1;
+    lot.leader=counter.rid;
+    lot.history.push({who:ROSTER_NAME[counter.rid]||'rival', price:lot.price});
+  }
+  save(); render();
+}
+
+/* Nobody raises: the standing leader takes it at the standing price. */
+function closeLot(){
+  if(!lot) return;
+  const p=lot.p;
+  if (lot.leader===null){
     const able=ROSTERS.map(r=>r.roster_id).filter(r=>slotsOfR(r)>0 && leftOfR(r)>=1);
     if(!able.length){ S.passed[p.name]=true; nomIdx++; nextLot(); save(); render(); return; }
-    bids.push({rid:able[nomIdx%able.length],bid:1});
+    lot.leader=able[nomIdx%able.length]; lot.price=1;
   }
-  bids.sort((a,b)=>b.bid-a.bid);
-  const win=bids[0], second=bids[1]?bids[1].bid:1;
-  const price=Math.max(1,Math.min(win.bid,second+1));
-  S.sold[p.name]={name:p.name,pos:p.pos,price:price,roster:win.rid,source:'sim'};
-  logSale(p.name,p.pos,price,win.rid);
+  S.sold[p.name]={name:p.name,pos:p.pos,price:lot.price,roster:lot.leader,source:'sim'};
+  logSale(p.name,p.pos,lot.price,lot.leader);
   nomIdx++; nextLot(); save(); render();
 }
+
 function renderLot(){
   const el=byId('lot'); el.classList.add('on');
   if(!lot){ el.innerHTML='<div class="who">Draft complete</div>'
@@ -840,25 +882,50 @@ function renderLot(){
   const p=lot.p, nom=ROSTER_NAME[lot.nominator]||'?';
   const rec=Math.min(p.value*inflation(), maxLegal());
   const full=slotsOfR(MY)<=0;
+  const leading=lot.leader===MY;
+  const leadName=lot.leader===null?'no bids yet':(ROSTER_NAME[lot.leader]||'rival');
+  const next=lot.leader===null?1:lot.price+1;
+
   el.innerHTML='<div class="who">'+p.name+'</div>'
    +'<div class="meta">'+p.pos+' &middot; '+p.team+' &middot; tier '+(p.tier||'-')
    +(p.bye?' &middot; bye '+p.bye:'')+' &mdash; nominated by '
    +(lot.nominator===MY?'<b>you</b>':nom)+'</div>'
    +'<div class="nums">'
+   +'<div class="n"><div class="v" style="color:'+(leading?'var(--pos-t)':'var(--ink)')+'">'
+     +money(lot.price)+'</div><div class="k">'+(leading?'You lead':'Standing bid')+'</div></div>'
    +'<div class="n"><div class="v">'+money(p.value)+'</div><div class="k">Our value</div></div>'
-   +'<div class="n"><div class="v">'+money(p.price)+'</div><div class="k">Market</div></div>'
-   +'<div class="n"><div class="v">'+money(rec)+'</div><div class="k">Your max</div></div></div>'
-   +(full?'<div class="legend"><b>Roster full</b> &mdash; pass to watch the rest.</div>':'')
-   +'<div class="bidrow"><input type="number" inputmode="decimal" id="mybid" value="'+Math.round(rec)+'">'
-   +'<button class="btn btn-primary" id="bid">Bid</button>'
-   +'<button class="btn btn-ghost" id="pass">Pass</button>'
-   +'<button class="btn btn-ghost" id="simreset">Reset</button></div>'
+   +'<div class="n"><div class="v">'+money(rec)+'</div><div class="k">Your max</div></div>'
+   +'</div>'
+   +'<div class="meta" style="margin:-4px 0 10px">'
+     +(leading?'<b style="color:var(--pos-t)">You are winning</b>':'High bidder: <b>'+leadName+'</b>')
+     +' &middot; '+lot.rivals.length+' rival'+(lot.rivals.length===1?'':'s')+' in on this lot</div>'
+   +(full?'<div class="legend"><b>Roster full</b> &mdash; close the lot to move on.</div>':
+      '<div class="bidrow" style="flex-wrap:wrap">'
+      +'<button class="btn btn-primary btn-sm" id="b1">Bid '+money(next)+'</button>'
+      +'<button class="btn btn-ghost btn-sm" id="b5">'+money(next+4)+'</button>'
+      +'<input type="number" inputmode="decimal" id="mybid" placeholder="$" style="width:84px">'
+      +'<button class="btn btn-ghost btn-sm" id="bx">Bid</button>'
+      +'</div>')
+   +'<div class="bidrow" style="margin-top:8px">'
+   +'<button class="btn btn-ghost btn-sm" id="pass">'
+     +(leading?'Close &mdash; I win':'Let it go')+'</button>'
+   +'<button class="btn btn-ghost btn-sm" id="simreset">Reset</button></div>'
+   +(lot.history.length?'<div class="legend">'+lot.history.slice(-6)
+      .map(h=>h.who+' '+money(h.price)).join(' &rarr; ')+'</div>':'')
+   +'<div class="legend">Your bid stands as entered &mdash; jump to '+money(rec)
+   +' and you pay it even if the last rival would have quit at half that.'
+   +' Nudging costs less than jumping.</div>'
    +'<div class="chips" style="margin-top:10px" id="modes">'
    +[['normal','Normal room'],['hot','Overheated'],['cold','Passive']].map(function(m){
        return '<span class="chip'+(MODE===m[0]?' on':'')+'" data-m="'+m[0]+'">'+m[1]+'</span>';
      }).join('')+'</div>';
-  byId('bid').onclick=function(){ simResolve(parseFloat(byId('mybid').value)||0); };
-  byId('pass').onclick=function(){ simResolve(0); };
+
+  if (!full){
+    byId('b1').onclick=function(){ userBid(next); };
+    byId('b5').onclick=function(){ userBid(next+4); };
+    byId('bx').onclick=function(){ const v=parseFloat(byId('mybid').value); if(v) userBid(v); };
+  }
+  byId('pass').onclick=closeLot;
   byId('simreset').onclick=simInit;
   byId('modes').onclick=function(e){
     const c=e.target.closest('.chip'); if(!c) return;
@@ -878,5 +945,4 @@ if (SIM){
 
 setPane('board');
 render();
-
 </script>
