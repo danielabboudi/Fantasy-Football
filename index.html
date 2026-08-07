@@ -207,6 +207,7 @@ nav.bottom-nav button.active::before{content:'';position:absolute;top:0;left:30%
     </div>
     <div class="syncbox">
       <button class="btn btn-ghost btn-sm" id="syncbtn">Sync</button>
+      <span class="chip" id="autochip" style="margin-left:5px">Auto</span>
       <div class="syncstat" id="syncstat">manual only</div>
     </div>
   </header>
@@ -740,6 +741,24 @@ document.body.addEventListener('click', e => {
     if (open){ const i = byId('pr-'+open); if (i) i.focus(); }
   }
 });
+
+
+/* Auto-sync. The bid clock is 60s and the nomination clock 15s, so hand-
+   tapping Sync between lots is not realistic while you are also bidding in
+   Sleeper. Polling every 12s keeps the room current hands-free and costs
+   5 calls/min against Sleeper's ~1000/min ceiling. Off by default so it is
+   never quietly hammering their API outside a draft. */
+const AUTO_MS = 12000;
+function setAuto(on){
+  if (autoTimer){ clearInterval(autoTimer); autoTimer = null; }
+  byId('autochip').classList.toggle('on', on);
+  localStorage.setItem(KEY+'_auto', on ? '1' : '0');
+  if (on){ syncDraft(); autoTimer = setInterval(syncDraft, AUTO_MS); }
+}
+byId('autochip').onclick = () => setAuto(!autoTimer);
+if (!SIM && localStorage.getItem(KEY+'_auto') === '1') setAuto(true);
+// never poll a live draft from the practice page
+if (SIM) byId('autochip').style.display = 'none';
 
 byId('syncbtn').onclick = syncDraft;
 
