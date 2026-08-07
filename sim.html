@@ -572,6 +572,38 @@ function rowHTML(p, i, pane){
    purpose: it must answer inside a 60-second bid clock, work with no
    network, and never invent a number.
    --------------------------------------------------------------------- */
+
+/* Room-level reads: these describe the DRAFT, not the player, so they hold
+   for any lot and are what you actually want when something unexpected is
+   happening around you. */
+function calibration(){
+  // how are sales clearing against our board tonight?
+  const rel = LOG.filter(l => l.value >= 5).map(l => l.price / l.value);
+  if (rel.length < 8) return null;
+  const sorted = rel.slice().sort((a,b) => a-b);
+  const med = sorted[Math.floor(sorted.length/2)];
+  return {n: rel.length, med: med};
+}
+function positionRun(){
+  const recent = LOG.slice(0, 8);
+  if (recent.length < 6) return null;
+  const by = {};
+  recent.forEach(l => by[l.pos] = (by[l.pos]||0) + 1);
+  let top = null;
+  for (const k in by) if (!top || by[k] > by[top]) top = k;
+  return by[top] >= 4 ? {pos: top, n: by[top], of: recent.length} : null;
+}
+function shutoutRisk(pos){
+  // startable players left at a position vs teams that still must fill it
+  const leftPool = DATA.filter(p => p.pos === pos && p.value > 5 && !S.sold[p.name]).length;
+  let teamsNeeding = 0;
+  ROSTERS.forEach(r => {
+    if (slotsOfR(r.roster_id) <= 0) return;
+    if ((rosterNeeds(r.roster_id)[pos] || 0) > 0) teamsNeeding++;
+  });
+  return {left: leftPool, needing: teamsNeeding};
+}
+
 function readNotes(p){
   const out = [];
   const price = p.value;
@@ -637,6 +669,34 @@ function readNotes(p){
   else if (inf > 1.06)
     out.push(['warn', 'Room is rich (' + inf.toFixed(2)
       + 'x) — money is chasing fewer players. Spend now, not later.']);
+
+
+  // --- room-level reads -------------------------------------------------
+  const cal = calibration();
+  if (cal){
+    if (cal.med > 1.12)
+      out.push(['warn', 'Sales are clearing ' + Math.round((cal.med-1)*100)
+        + '% ABOVE our board tonight (n=' + cal.n
+        + ') — our numbers are running cold, expect to be outbid.']);
+    else if (cal.med < 0.9)
+      out.push(['clear', 'Sales are clearing ' + Math.round((1-cal.med)*100)
+        + '% BELOW our board (n=' + cal.n
+        + ') — our numbers are running hot, you can wait and pay less.']);
+  }
+  const run = positionRun();
+  if (run && run.pos === p.pos)
+    out.push(['warn', run.n + ' of the last ' + run.of + ' lots were '
+      + run.pos + ' — a run is on, prices at this position are inflated.']);
+  else if (run)
+    out.push(['info', 'A ' + run.pos + ' run is on (' + run.n + ' of last '
+      + run.of + ') — other positions are quietly getting cheaper.']);
+
+  const risk = shutoutRisk(p.pos);
+  if ((n[p.pos] || 0) > 0 && risk.left <= risk.needing)
+    out.push(['warn', 'Only ' + risk.left + ' startable ' + p.pos
+      + ' left for ' + risk.needing + ' teams that still need one'
+      + (p.pos === 'QB' ? ' — the QB slot is mandatory and unfillable otherwise.'
+                        : '.')]);
 
   return out;
 }
