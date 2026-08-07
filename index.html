@@ -244,6 +244,7 @@ nav.bottom-nav button.active::before{content:'';position:absolute;top:0;left:30%
   <div class="track" style="margin-bottom:13px"><div class="fill" id="spendbar" style="width:0%"></div></div>
   <div id="warnwrap"></div>
 
+  <div class="read" id="grade"></div>
   <div class="lot" id="lot"></div>
   <div class="toptabs" id="toptabs"></div>
 
@@ -628,6 +629,114 @@ function stillNeed(){
 }
 
 
+
+/* ---- roster grading (simulator) --------------------------------------
+   Fitted from 2022-25 weekly results: sd = intercept + slope x weekly mean.
+   Note QB's slope is almost flat (0.085) — quarterback volatility barely
+   grows with output, which is why a good QB is such a strong floor play. */
+const VOL = {QB:[6.067,0.085], RB:[2.380,0.376], WR:[2.134,0.424], TE:[1.648,0.470]};
+const SLOT_ORDER = ['QB','RB','RB','WR','WR','TE','FLEX','SUPER_FLEX'];
+const SLOT_OK = {FLEX:['RB','WR','TE'], SUPER_FLEX:['QB','RB','WR','TE']};
+
+function weeklyOf(p){
+  const mu = (p.proj || 0) / 17;
+  const v = VOL[p.pos] || [3,0.3];
+  return [mu, v[0] + v[1]*mu];
+}
+function bestLineup(players){
+  const left = players.slice().sort((a,b) => (b.proj||0) - (a.proj||0));
+  const used = {}, out = [];
+  SLOT_ORDER.forEach(slot => {
+    const ok = SLOT_OK[slot] || [slot];
+    for (let i=0;i<left.length;i++){
+      if (used[i] || ok.indexOf(left[i].pos) < 0) continue;
+      used[i] = 1; out.push(left[i]); break;
+    }
+  });
+  return out;
+}
+function gaussian(){ // Box-Muller
+  let u=0,v=0; while(!u) u=Math.random(); while(!v) v=Math.random();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function gradeRoster(){
+  const mine = mineRecs().map(s => BOARD[s.name]).filter(Boolean);
+  if (mine.length < 5) return null;
+  const st = bestLineup(mine);
+  let mu = 0, varSum = 0;
+  st.forEach(p => { const w = weeklyOf(p); mu += w[0]; varSum += w[1]*w[1]; });
+  const sd = Math.sqrt(varSum);
+
+  // a par opponent: the board's own top players filling the same slots
+  const par = bestLineup(DATA.filter(p => p.rostered).slice(0, 90));
+  let pmu = 0, pvar = 0;
+  par.forEach(p => { const w = weeklyOf(p); pmu += w[0]; pvar += w[1]*w[1]; });
+  const psd = Math.sqrt(pvar) || 1;
+
+  let last = 0;
+  const N = 12000;
+  for (let i=0;i<N;i++){
+    const me = mu + sd*gaussian();
+    let min = Infinity;
+    for (let j=0;j<LG.teams-1;j++){
+      const o = pmu + psd*gaussian();
+      if (o < min) min = o;
+    }
+    if (me < min) last++;
+  }
+  const pLast = last / N;
+  const survive4 = Math.pow(1 - pLast, 4);
+
+  // bye clashes among starters, by position
+  const byes = {};
+  st.forEach(p => { if (p.bye) (byes[p.pos+':'+p.bye] = byes[p.pos+':'+p.bye] || []).push(p.name); });
+  const clashes = Object.keys(byes).filter(k => byes[k].length > 1);
+
+  const spent = LG.budget - budgetLeft();
+  const value = mine.reduce((a,p) => a + p.value, 0);
+  const grade = pLast < 0.04 ? 'A' : pLast < 0.06 ? 'B'
+              : pLast < 0.09 ? 'C' : pLast < 0.13 ? 'D' : 'F';
+  return {mu:mu, sd:sd, floor:mu-sd, pLast:pLast, survive4:survive4,
+          grade:grade, starters:st.length, clashes:clashes, byes:byes,
+          spent:spent, value:value, roster:mine.length};
+}
+
+function renderGrade(){
+  const el = byId('grade');
+  if (!SIM || slotsLeft() > 0){ el.classList.remove('on'); return; }
+  const g = gradeRoster();
+  if (!g){ el.classList.remove('on'); return; }
+  el.classList.add('on');
+  const notes = [];
+  if (g.starters < 8)
+    notes.push(['warn', 'You cannot field a full lineup — only ' + g.starters
+      + ' of 8 slots. That alone nearly triples your risk.']);
+  g.clashes.forEach(k => {
+    const pos = k.split(':')[0], wk = k.split(':')[1];
+    notes.push(['warn', g.byes[k].join(' and ') + ' are both off in week '
+      + wk + '. You are short a ' + pos + ' that week.']);
+  });
+  notes.push([g.pLast < 0.06 ? 'clear' : 'warn',
+    'Survive all 4 opening weeks: ' + Math.round(g.survive4*100)
+    + '%. Weeks 1-4 carry 39% of the season.']);
+  notes.push([g.value >= g.spent ? 'clear' : 'warn',
+    'Paid ' + money(g.spent) + ' for ' + money(g.value) + ' of value ('
+    + (g.value >= g.spent ? 'good' : 'overpaid by ' + money(g.spent-g.value)) + ').']);
+
+  el.innerHTML = '<div class="rd-top"><div><div class="rd-nm">Draft grade: '
+    + g.grade + '</div><div class="rd-mt">' + g.roster + ' players &middot; '
+    + money(g.spent) + ' spent</div></div>'
+    + '<div class="rd-bid"><div class="v">' + (g.pLast*100).toFixed(1)
+    + '%</div><div class="k">last place risk</div></div></div>'
+    + '<div class="rd-n ' + (g.pLast < 0.06 ? 'clear' : 'warn') + ' hero">'
+    + '<b>' + g.mu.toFixed(0) + ' pts a week, floor ' + g.floor.toFixed(0) + '</b><br>'
+    + (g.pLast < 0.04 ? 'Strong floor. You should outlast the field.'
+     : g.pLast < 0.06 ? 'Solid. You are safer than an average team.'
+     : g.pLast < 0.09 ? 'Playable, but one bad week could end you.'
+     : 'Risky. You are more likely than most to go out early.') + '</div>'
+    + notes.map(n => '<div class="rd-n ' + n[0] + '">' + n[1] + '</div>').join('');
+}
+
 /* ---- what the room is doing ------------------------------------------ */
 function roomNotes(){
   const out = [];
@@ -890,6 +999,7 @@ function render(){
   }).join('') : '<div class="empty">Nothing sold yet</div>';
 
   renderRead();
+  renderGrade();
   if (SIM) renderLot();
   if (open){ const el = byId('sale-'+open); if (el) el.classList.add('on'); }
   if (lastSync && !syncErr) {
