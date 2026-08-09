@@ -1,0 +1,58 @@
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BirdBrain — draft boards</title>
+<style>
+:root{--bg:#0B0B0F;--ink:#F5F5F7;--mut:#9A9AA5;--line:#26262E;
+  --card:#15151C;--acc:#8F6BFF}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  padding:40px 20px;display:flex;flex-direction:column;align-items:center}
+h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px}
+.sub{color:var(--mut);font-size:14px;margin-bottom:32px}
+.wrap{width:100%;max-width:440px}
+.card{display:block;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;padding:20px;text-decoration:none;color:inherit;
+  margin-bottom:8px;transition:border-color .15s}
+.card:hover{border-color:var(--acc)}
+.when{color:var(--acc);font-size:12px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase}
+.nm{font-size:19px;font-weight:600;margin:6px 0 8px;letter-spacing:-.01em}
+.fmt{color:var(--mut);font-size:13px}
+.note{color:var(--mut);font-size:12px;margin-top:10px;padding-top:10px;
+  border-top:1px solid var(--line)}
+.go{margin-top:12px;font-size:14px;font-weight:600;color:var(--acc)}
+.sim{display:block;text-align:center;color:var(--mut);font-size:13px;
+  text-decoration:none;padding:9px;margin-bottom:26px;border-radius:9px;
+  border:1px solid var(--line)}
+.sim:hover{color:var(--ink);border-color:var(--acc)}
+.warn{color:var(--mut);font-size:12px;line-height:1.6;margin-top:8px;
+  padding:14px;border:1px solid var(--line);border-radius:11px}
+.warn b{color:var(--ink)}
+</style>
+<h1>BirdBrain</h1>
+<div class="sub">Two auctions. Two different boards.</div>
+<div class="wrap">
+    <a class="card" href="index.html">
+      <div class="when">Sun Aug 30</div>
+      <div class="nm">The Other Roemer League</div>
+      <div class="fmt">18 teams &middot; $200 auction &middot;
+        superflex
+        &middot; guillotine</div>
+      <div class="note">live Sleeper sync</div>
+      <div class="go">Open board &rarr;</div>
+    </a>
+    <a class="sim" href="sim.html">Practice &rarr;</a>
+    <a class="card" href="yahoo.html">
+      <div class="when">Mon Sep 7</div>
+      <div class="nm">The New Milfs</div>
+      <div class="fmt">12 teams &middot; $200 auction &middot;
+        single QB
+        </div>
+      <div class="note">manual entry only</div>
+      <div class="go">Open board &rarr;</div>
+    </a>
+    <a class="sim" href="yahoo-sim.html">Practice &rarr;</a>
+  <div class="warn"><b>Do not read one board's prices into the other.</b>
+  Same $200, but 18 teams with a superflex is not 12 teams with one QB.
+  Drake Maye is worth $56 in the Sleeper league and $13 in the Yahoo one.</div>
+</div>
