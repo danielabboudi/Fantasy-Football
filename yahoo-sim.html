@@ -265,7 +265,8 @@ nav.bottom-nav button.active::before{content:'';position:absolute;top:0;left:30%
           <div id="board"></div>
           <div class="legend">Bold = our value · below = market price · right = surplus.
             Tap a row to record a sale. <b>Buys</b> sorts by value over market;
-            <b>Fade</b> inverts it — those are your nomination candidates.</div>
+            <b>Fade</b> inverts it — those are your nomination candidates.
+            <b>Hide sold</b> clears players other teams have bought; yours stay.</div>
         </div>
       </section>
     </div>
@@ -407,6 +408,13 @@ if (!SIM && S && S.sold){
   Object.keys(S.sold).forEach(k => { if (S.sold[k].source === 'sim') delete S.sold[k]; });
 }
 let filt='ALL', sort='value', hideFilled=false, open=null, active='board';
+// "Hide sold" survives a reload, unlike the other chips. On draft night the
+// page gets refreshed, backgrounded and come back to; having to re-hide 150
+// gone players every time is exactly the sort of friction that gets a tool
+// abandoned mid-draft. Namespaced by KEY, so practice and live remember
+// separately. NOTE: distinct from hideFilled, which hides POSITIONS you no
+// longer need — different question, both useful, both kept.
+let hideSold = localStorage.getItem(KEY+'_hidesold') === '1';
 let LOG = JSON.parse(localStorage.getItem(KEY+'_log') || '[]');
 let autoTimer=null, lastSync=null, syncErr=null;
 
@@ -476,14 +484,29 @@ function inflation(){
    included. A signal that never changes is not a signal.
 
    This is a flow measure instead: over the last N lots to clear, what did the
-   room actually PAY against what our board says those same players are worth.
-   It separates the rooms cleanly and keeps separating them late, where the
-   stock ratio converges to 1.00 by construction:
+   room actually PAY against the MARKET price of those same players.
 
-       after 25 / 50 / 75 / 100 lots
-       passive     1.25  0.90  0.75  0.74
-       normal      1.49  0.99  0.80  0.30
-       overheated  1.73  1.08  0.28  0.07
+   Against MARKET, not against our value — that distinction is the whole thing,
+   and the first version got it wrong. Our board prices the top of the pool well
+   under the public market (Josh Allen: ours $60, market $84), and expensive
+   players are nominated first. So measured against our value, ANY room paying
+   near market reads as "paying up" through the opening stretch, and the passive
+   practice room reported 1.35 while its bots were explicitly bidding BELOW
+   market. That conflated two different questions: "is the room hot" and "does
+   our board disagree with the market about these particular players". The
+   second one is surplus, it is already on every row, and it does not belong in
+   a temperature gauge. The room's own yardstick is the market, so use it:
+
+       after 15 / 30 / 50 / 70 / 90 lots
+       passive     1.06  1.00  0.97  0.94  0.88
+       normal      1.26  1.18  1.12  1.06  0.70
+       overheated  1.49  1.38  1.21  0.60  0.10
+
+   Worth knowing what those passive numbers mean: with 18 bidders the winner is
+   the top of 18 draws, so a room of individually timid bidders still clears
+   near market. Room "passivity" moves clearing prices far less than it feels
+   like it should — what actually makes players cheap is the room running OUT
+   of money, which is the collapse visible in the overheated row.
 
    Insertion order is chronological for both sources: sync assigns into the
    existing object so established keys hold their slot and new picks append,
@@ -495,7 +518,7 @@ function roomHeat(n){
   const w = recs.slice(-(n || 20));
   if (w.length < 8) return null;          // too few lots to read anything into
   let paid = 0, val = 0;
-  w.forEach(s => { const p = BOARD[s.name]; if (!p) return; paid += s.price; val += p.value; });
+  w.forEach(s => { const p = BOARD[s.name]; if (!p || !p.price) return; paid += s.price; val += p.price; });
   return val > 0 ? paid / val : null;
 }
 
@@ -952,9 +975,9 @@ function roomNotes(){
 
   const heat = roomHeat(20);
   if (heat !== null)
-    out.push([heat < 0.85 ? 'clear' : (heat > 1.15 ? 'warn' : 'info'),
-      'Last 20 lots cleared at ' + Math.round(heat*100) + '% of our value'
-      + (heat < 0.85 ? ' — bargains are clearing now.'
+    out.push([heat < 0.90 ? 'clear' : (heat > 1.15 ? 'warn' : 'info'),
+      'Last 20 lots cleared at ' + Math.round(heat*100) + '% of market'
+      + (heat < 0.90 ? ' — bargains are clearing now.'
        : heat > 1.15 ? ' — the room is overpaying. Sit out.'
                      : '.')]);
 
@@ -978,14 +1001,15 @@ function roomVerdict(){
   if (pc && pc.spentShare - pc.slotShare > 0.25)
     return ['warn', 'CHEAP PLAYERS ONLY', money(pc.perSlot)
       + '/spot left. Never bid over our price.'];
+  // 0.90 / 1.15 against market, read off the three simulated rooms above.
   const heat = roomHeat(20);
-  if (heat !== null && heat < 0.85)
+  if (heat !== null && heat < 0.90)
     return ['clear', 'ROOM IS ASLEEP — BUY',
-      'Last 20 lots went for ' + Math.round(heat*100) + '% of our value. '
+      'Last 20 lots went for ' + Math.round(heat*100) + '% of market. '
       + 'Bid to your max on ' + stillNeed() + ' — but not a dollar past it.'];
   if (heat !== null && heat > 1.15)
     return ['warn', 'ROOM IS PAYING UP — WAIT',
-      'Last 20 lots went for ' + Math.round(heat*100) + '% of our value. '
+      'Last 20 lots went for ' + Math.round(heat*100) + '% of market. '
       + 'Let them go; their money runs out before the board does.'];
   return ['info', 'ON TRACK', money(budgetLeft()) + ' for ' + slotsLeft()
     + ' spots. Need ' + stillNeed() + '.'];
@@ -1134,13 +1158,19 @@ function render(){
   const n = needs();
   let list = DATA.filter(p => (filt==='ALL' || p.pos===filt)
     && (!q || p.name.toLowerCase().includes(q))
-    && (!hideFilled || n[p.pos] > 0));
+    && (!hideFilled || n[p.pos] > 0)
+    // Players you own stay visible even when sold is hidden — the board
+    // doubles as your roster check and blanking your own team would be worse
+    // than the clutter this removes.
+    && (!hideSold || !S.sold[p.name] || S.sold[p.name].roster === MY));
   if (sort === 'surplus') list = list.slice().sort((a,b) => b.surplus - a.surplus);
   else if (sort === 'fade') list = list.slice().sort((a,b) => a.surplus - b.surplus);
   else if (sort === 'market') list = list.slice().sort((a,b) => b.price - a.price);
   byId('board').innerHTML = list.slice(0,200).map((p,i)=>rowHTML(p,i,'b')).join('')
     || '<div class="empty">No players</div>';
-  byId('c-board').textContent = list.length + ' shown';
+  const goneCount = DATA.filter(p => S.sold[p.name] && S.sold[p.name].roster !== MY).length;
+  byId('c-board').textContent = list.length + ' shown'
+    + (hideSold && goneCount ? ' · ' + goneCount + ' hidden' : '');
 
   // room
   byId('room').innerHTML = ROSTERS.map(r => {
@@ -1234,12 +1264,18 @@ window.addEventListener('resize', () => setPane(active));
 /* ---------- filters ----------------------------------------------------- */
 byId('chips').innerHTML = ['ALL'].concat(POS)
   .map(k => '<span class="chip'+(k==='ALL'?' on':'')+'" data-f="'+k+'">'+k+'</span>').join('')
-  + '<span class="chip alt" data-h="1">Hide filled</span>';
+  + '<span class="chip alt" data-h="1">Hide filled</span>'
+  + '<span class="chip alt'+(hideSold?' on':'')+'" data-g="1">Hide sold</span>';
 byId('sorts').innerHTML = [['value','Value'],['surplus','Buys'],['fade','Fade'],['market','Market']]
   .map(([k,l]) => '<span class="chip alt'+(k==='value'?' on':'')+'" data-s="'+k+'">'+l+'</span>').join('');
 byId('chips').onclick = e => {
   const c = e.target.closest('.chip'); if (!c) return;
   if (c.dataset.h){ hideFilled = !hideFilled; c.classList.toggle('on', hideFilled); render(); return; }
+  if (c.dataset.g){
+    hideSold = !hideSold;
+    localStorage.setItem(KEY+'_hidesold', hideSold ? '1' : '0');
+    c.classList.toggle('on', hideSold); render(); return;
+  }
   filt = c.dataset.f;
   document.querySelectorAll('#chips .chip[data-f]').forEach(x => x.classList.toggle('on', x===c));
   render();
@@ -1386,7 +1422,9 @@ byId('m-add').onclick = () => {
    jumping. The old model hid that cost entirely.
    ---------------------------------------------------------------- */
 const MODES = {normal:[0.88,1.12], hot:[1.05,1.35], cold:[0.72,0.95]};
-let MODE='normal', bots={}, lot=null, seed=20260830, nomIdx=0;
+let MODE='normal', bots={}, lot=null, seed=20260830, nomIdx=0, runSeed=20260830;
+// Recent nomination history, for the positional-run term. Newest first.
+let nomHist=[];
 function rnd(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
 
 function seatBots(){
@@ -1394,8 +1432,14 @@ function seatBots(){
   bots={};
   ROSTERS.forEach(r=>{ if(r.roster_id!==MY) bots[r.roster_id]={agg:lo+rnd()*(hi-lo)}; });
 }
-function simInit(){
-  seed=20260830; nomIdx=0; S={sold:{},passed:{}}; LOG=[];
+function simInit(newSeed){
+  // A fixed seed meant every practice draft was the SAME draft, in the same
+  // order, which teaches the order rather than the skill. Each Reset now draws
+  // a fresh one. It is shown on the panel so a draft worth repeating can be
+  // typed back in — reproducibility when you want it, not by default.
+  runSeed = (newSeed != null && !isNaN(newSeed)) ? (Math.abs(Math.floor(newSeed)) % 2147483647)
+                                                 : Math.floor(Math.random()*2147483647);
+  seed=runSeed; nomIdx=0; nomHist=[]; S={sold:{},passed:{}}; LOG=[];
   seatBots(); save(); nextLot(); render();
 }
 function botMax(rid,p){
@@ -1411,6 +1455,76 @@ function botMax(rid,p){
   return Math.min(Math.round(v), cap);
 }
 
+/* WHO GETS NOMINATED — a model, not a measurement. Say so plainly: this league
+   is new (no previous_league_id) and nothing in the project holds real auction
+   nomination data, so none of the weights below are fitted to observed drafts.
+   They are mechanisms that are individually defensible, and they are here
+   because the alternative — uniform random from the fourteen priciest players —
+   produced a draft that felt nothing like an auction and, with a fixed seed,
+   the SAME draft every time.
+
+   Five terms, multiplied:
+
+   1. PRICE, with the exponent decaying as the draft ages. Early on the room
+      throws out the expensive names; by the end it is $1 fliers. One knob
+      (`phase`) moves the board from steeply top-heavy to nearly flat.
+   2. THE NOMINATOR'S OWN NEED. A manager still missing a tight end puts tight
+      ends up. This is what makes late nominations look purposeful.
+   3. SCARCITY, computed from the league's real numbers rather than asserted.
+      Roemer starts 30 QBs across 18 teams against a thin pool, so QB scarcity
+      runs hot and quarterbacks come up early and often — WITHOUT anyone having
+      hardcoded "superflex means QBs go first". On the Yahoo board, where 12
+      teams start one QB each, the same term stays near 1 and QBs do not rush.
+      The behaviour follows the format because it is derived from it.
+   4. POSITIONAL RUNS. Auctions cluster: a quarterback going up makes the next
+      nomination more likely to be a quarterback. Reads the last six lots.
+   5. AFFORDABILITY. A nominator cannot meaningfully put up a player he could
+      not pay for, so those are heavily damped — this is what produces the
+      $1-dump phase at the end without scripting one.
+
+   Sampling is weighted-random over the whole remaining pool, so even a heavily
+   favoured player is not certain and no two drafts run the same order. */
+function posScarcity(pos){
+  // league-wide starting demand still unfilled, against startable players left
+  const dem = (LG.demand && LG.demand[pos]) || 0;
+  if (!dem) return 1;
+  let filled = 0;
+  Object.values(S.sold).forEach(x => { if (x.pos === pos) filled++; });
+  const need = Math.max(0, dem - filled);
+  const supply = DATA.filter(p => p.pos === pos && p.value > 3 && !S.sold[p.name]).length;
+  if (supply <= 0) return 1;
+  // 1.0 when supply comfortably covers demand, climbing as it tightens
+  return Math.max(0.6, Math.min(2.2, 0.6 + 1.4 * (need / supply)));
+}
+
+function nominate(rid, pool){
+  const filledLeague = Object.keys(S.sold).length / Math.max(1, LG.teams * LG.roster_size);
+  const phase = Math.max(0, Math.min(1, filledLeague));
+  const expo = 2.2 - 1.7 * phase;        // 2.2 early (top-heavy) -> 0.5 late (flat)
+  const nd = rosterNeeds(rid);
+  const cap = maxOfR(rid);
+  const runs = {};
+  nomHist.forEach((p, i) => { runs[p] = (runs[p] || 0) + (1 - i * 0.15); });
+  const scar = {};
+
+  let total = 0;
+  const w = new Array(pool.length);
+  for (let i = 0; i < pool.length; i++){
+    const p = pool[i];
+    if (scar[p.pos] === undefined) scar[p.pos] = posScarcity(p.pos);
+    let x = Math.pow(Math.max(p.price, 0.5), expo);
+    if (nd[p.pos]) x *= 1.8;
+    x *= scar[p.pos];
+    if (runs[p.pos]) x *= 1 + 0.30 * runs[p.pos];
+    if (p.price > cap) x *= 0.15;        // cannot really contest him
+    w[i] = x; total += x;
+  }
+  if (!(total > 0)) return pool[Math.floor(rnd() * pool.length)];
+  let r = rnd() * total;
+  for (let i = 0; i < pool.length; i++){ r -= w[i]; if (r <= 0) return pool[i]; }
+  return pool[pool.length - 1];
+}
+
 /* Open a lot: bots bid each other out, leaving one leader and a live price. */
 function nextLot(){
   S.passed = S.passed || {};
@@ -1418,9 +1532,16 @@ function nextLot(){
   if(!pool.length){ lot=null; return; }
   const nominator=ROSTERS[nomIdx%ROSTERS.length].roster_id;
   let pick;
-  if (nominator===MY) pick=pool.slice().sort((a,b)=>b.surplus-a.surplus)[0];
-  else { const top=pool.slice().sort((a,b)=>b.price-a.price).slice(0,14);
-         pick=top[Math.floor(rnd()*top.length)]; }
+  if (nominator===MY){
+    // The board's own legend says the Fade column is "your nomination
+    // candidates" — players you do NOT want, thrown out to drain rivals'
+    // budgets. The simulator used to nominate your BEST buy, i.e. the exact
+    // opposite of the advice printed under the board. Now they agree.
+    pick=pool.slice().sort((a,b)=>a.surplus-b.surplus)[0];
+  } else {
+    pick=nominate(nominator, pool);
+  }
+  nomHist.unshift(pick.pos); if (nomHist.length>6) nomHist.pop();
 
   const rivals=[];
   ROSTERS.forEach(r=>{ if(r.roster_id===MY) return;
@@ -1507,6 +1628,11 @@ function renderLot(){
    +'<button class="btn btn-ghost btn-sm" id="pass">'
      +(leading?'Close &mdash; I win':'Let it go')+'</button>'
    +'<button class="btn btn-ghost btn-sm" id="simreset">Reset</button></div>'
+   +'<div class="meta" style="margin-top:8px">Draft #<b>'+runSeed+'</b> · '
+   +'<input id="simseed" placeholder="seed" inputmode="numeric" '
+   +'style="width:96px;padding:3px 6px;font-size:12px" value="">'
+   +' <button class="btn btn-ghost btn-sm" id="simreplay">Replay</button>'
+   +' — Reset draws a new draft; type a number to run that one again.</div>'
    +(lot.history.length?'<div class="legend">'+lot.history.slice(-6)
       .map(h=>h.who+' '+money(h.price)).join(' &rarr; ')+'</div>':'')
    +'<div class="legend">Your bid stands as entered &mdash; jump to '+money(rec)
@@ -1523,7 +1649,11 @@ function renderLot(){
     byId('bx').onclick=function(){ const v=parseFloat(byId('mybid').value); if(v) userBid(v); };
   }
   byId('pass').onclick=closeLot;
-  byId('simreset').onclick=simInit;
+  byId('simreset').onclick=function(){ simInit(); };
+  byId('simreplay').onclick=function(){
+    const v=parseInt(byId('simseed').value,10);
+    if(!isNaN(v)) simInit(v);
+  };
   byId('modes').onclick=function(e){
     const c=e.target.closest('.chip'); if(!c) return;
     MODE=c.dataset.m; simInit();
@@ -1536,7 +1666,7 @@ if (SIM){
   byId('syncbtn').style.display='none';
   byId('syncstat').innerHTML='practice room · bots bidding';
   seatBots();
-  if (!Object.keys(S.sold).length) simInit();
+  if (!Object.keys(S.sold).length) simInit();   // draws a fresh seed
   else nextLot();
 }
 
