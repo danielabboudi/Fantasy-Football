@@ -98,7 +98,7 @@ h1 span.t{color:var(--ink)}
 .hit b{font-weight:700;color:var(--muted);font-size:11px}
 .hit.on{background:var(--slate);color:var(--on-slate);border-color:var(--slate)}
 .hit.on b{color:var(--on-slate)}
-.hit.gone{opacity:.5;text-decoration:line-through}
+/* no .hit.gone rule: sold players are filtered out of the chip row entirely */
 .chip{font-size:11.5px;font-weight:600;padding:5px 12px;border-radius:var(--r-pill);cursor:pointer;
   background:var(--slate-tint);color:var(--muted);border:1px solid transparent;user-select:none}
 .chip.on{background:var(--slate);color:var(--on-slate)}
@@ -429,7 +429,11 @@ let filt='ALL', sort='value', hideFilled=false, open=null, active='board';
 // abandoned mid-draft. Namespaced by KEY, so practice and live remember
 // separately. NOTE: distinct from hideFilled, which hides POSITIONS you no
 // longer need — different question, both useful, both kept.
-let hideSold = localStorage.getItem(KEY+'_hidesold') === '1';
+// Default ON. Danny drafts from this one list with the Sleeper room beside him,
+// and a board carrying every sold player is just noise by the third round. An
+// explicit '0' (he turned it off) still wins; only "never set" defaults to on.
+// Safe to default because the row filter keeps HIS OWN players visible either way.
+let hideSold = localStorage.getItem(KEY+'_hidesold') !== '0';
 let LOG = JSON.parse(localStorage.getItem(KEY+'_log') || '[]');
 let autoTimer=null, lastSync=null, syncErr=null;
 
@@ -1284,12 +1288,15 @@ function searchHits(q, limit){
 
 function renderHits(){
   const el = byId('hits');
-  const hits = searchHits(byId('q').value, 6);
+  // Search wider than we show, because the sold filter eats candidates: with a
+  // limit of 6 applied first, six sold Browns would leave an empty chip row.
+  const hits = searchHits(byId('q').value, 14)
+    .filter(h => !S.sold[h.name]).slice(0, 6);
   if (hits.length < 2){ el.innerHTML = ''; el.classList.remove('on'); return; }
   el.classList.add('on');
   el.innerHTML = hits.map(h => {
-    const gone = !!S.sold[h.name], on = pick && pick.name === h.name;
-    return '<span class="hit' + (gone ? ' gone' : '') + (on ? ' on' : '')
+    const on = pick && pick.name === h.name;
+    return '<span class="hit' + (on ? ' on' : '')
       + '" data-n="' + encodeURIComponent(h.name) + '">' + h.name
       + ' <b>' + h.pos + '</b></span>';
   }).join('');
@@ -1303,13 +1310,17 @@ function clearBlock(){
 
 function renderRead(){
   const el = byId('read');
-  const hits = searchHits(byId('q').value, 6);
+  // Sold players are not candidates. Nobody nominates a player who has already
+  // gone, so leaving them in only pushes the real answer down the list.
+  const all = searchHits(byId('q').value, 12);
+  const avail = all.filter(h => !S.sold[h.name]);
   let p = null;
-  // A tapped chip wins. Otherwise take the best match that is still available —
-  // falling back to the top hit even if it is sold, so the panel can SAY he is
-  // sold rather than going blank and leaving you guessing.
-  if (pick && hits.some(h => h.name === pick.name)) p = pick;
-  else if (hits.length) p = hits.find(h => !S.sold[h.name]) || hits[0];
+  if (pick && avail.some(h => h.name === pick.name)) p = pick;
+  else if (avail.length) p = avail[0];
+  // ONLY when every match is sold do we surface one, so the panel can say "he is
+  // gone" rather than going silent. Silence was the original bug and it must not
+  // come back through this door.
+  else if (all.length) p = all[0];
   if (!p && SIM && typeof lot !== 'undefined' && lot) p = lot.p;
   el.classList.add('on');
 
@@ -1641,7 +1652,12 @@ function setAuto(on){
   if (on){ syncDraft(); autoTimer = setInterval(syncDraft, AUTO_MS); }
 }
 byId('autochip').onclick = () => setAuto(!autoTimer);
-if (!SIM && F.sync && localStorage.getItem(KEY+'_auto') === '1') setAuto(true);
+// Default ON for the live board. This used to be opt-in and remembered, so a
+// fresh device — or site data cleared on draft morning — would open with sync OFF
+// and every number frozen at zero picks, with nothing obviously wrong on screen.
+// Still respects an explicit '0', so switching it off mid-draft sticks.
+// SIM stays excluded: a rehearsal page must never poll a live draft.
+if (!SIM && F.sync && localStorage.getItem(KEY+'_auto') !== '0') setAuto(true);
 // never poll a live draft from the practice page, and never offer polling for a
 // league with nothing to poll
 if (SIM || !F.sync) byId('autochip').style.display = 'none';
