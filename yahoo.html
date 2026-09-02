@@ -463,6 +463,32 @@ const budgetLeft = () => LG.budget - spent();
 const slotsLeft = () => LG.roster_size - mineRecs().length;
 const maxLegal = () => Math.max(1, budgetLeft() - (slotsLeft() - 1));
 
+// The cheapest player still available at a position — what it would actually
+// cost to fill a hole there later. Floored at $1.
+function cheapestAt(pos){
+  var c = Infinity;
+  DATA.forEach(function(x){
+    if (x.pos === pos && !S.sold[x.name] && (x.price || 0) > 0)
+      c = Math.min(c, x.price);
+  });
+  return c === Infinity ? 1 : Math.max(1, c);
+}
+// The postmortem gap: maxLegal reserves only $1 per empty slot, so the board
+// would happily tell you to bid into a state where you can no longer AFFORD a
+// position you still need (it let me hear "$18 on Fannin" with three unfilled
+// slots). This reserves the real cost of your other unmet needs — cheapest
+// available at each — so the ceiling for a player never strands a required slot.
+// It only ever LOWERS the cap; where you have no unmet needs it equals maxLegal.
+function maxForNeeds(pos){
+  var need = rosterNeeds(MY);
+  if (pos && need[pos] > 0) need[pos] -= 1;   // this player fills one of them
+  var reserve = 0, needSlots = 0;
+  for (var k in need){ needSlots += need[k]; reserve += need[k] * cheapestAt(k); }
+  var bench = Math.max(0, slotsLeft() - 1 - needSlots);   // pure depth at $1
+  reserve += bench;
+  return Math.max(1, budgetLeft() - reserve);
+}
+
 const slotsOfR = rid => LG.roster_size -
   Object.values(S.sold).filter(s => s.roster === rid).length;
 const leftOfR = rid => LG.budget -
@@ -601,7 +627,13 @@ function maxBid(p){
   if (fit.empty) rec = Math.max(rec, 1);
   // never negative: maxLegal() floors at $1 but pressure() goes below zero if
   // the sheet ever says you have overspent, and a negative max bid is noise.
-  return Math.max(0, Math.min(rec, maxLegal()));
+  // Cap by BOTH the legal max and the needs-aware max, so a bid can never strand
+  // a position you still have to fill. For a slot you MUST fill (fit.empty at a
+  // needed position) the needs cap can dip to $1 — floor it there so the board
+  // still says "you can pay for him", just not at the expense of everything else.
+  var cap = Math.min(maxLegal(), maxForNeeds(p.pos));
+  if (fit.empty) cap = Math.max(cap, 1);
+  return Math.max(0, Math.min(rec, cap));
 }
 
 function warnings(){
