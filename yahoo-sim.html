@@ -327,6 +327,14 @@ nav.bottom-nav button.active::before{content:'';position:absolute;top:0;left:30%
           <div class="log" id="loglist"></div>
           <div class="legend">Every sale, newest first — price paid against our
             value, so you can see the room drifting rich or cheap in real time.</div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-sm" id="exportbtn">Export draft</button>
+            <button class="btn btn-ghost btn-sm" id="copybtn">Copy for Claude</button>
+          </div>
+          <div class="legend" id="exporthint">Export downloads every pick as a
+            file for your records. Copy puts the full results on your clipboard in
+            the exact format to paste into a chat — so the draft is never trapped
+            in this browser again.</div>
         </div>
       </section>
 
@@ -1707,6 +1715,57 @@ if (SIM || !F.sync) byId('autochip').style.display = 'none';
 if (!F.sync) byId('syncbtn').style.display = 'none';
 
 byId('syncbtn').onclick = syncDraft;
+
+/* ---- export: never let a completed draft be trapped in one browser again ----
+   The whole Yahoo review was blocked because the results lived only in this
+   page's localStorage and nothing wrote them out. These two buttons fix that:
+   a file for the record, and a clipboard copy in the exact line format Claude
+   parses ("Player (POS) -> Team $price · our $val · over/under $x"). */
+function draftLines(){
+  var rows = Object.keys(S.sold).map(function(n){
+    var s = S.sold[n], p = BOARD[n] || {};
+    var ours = (p.value != null ? p.value : 0);
+    var edge = (s.price - ours);
+    return {name:n, pos:s.pos, team:(ROSTER_NAME[s.roster]||('team '+s.roster)),
+            price:s.price, ours:ours, mine:s.roster===MY, edge:edge};
+  });
+  rows.sort(function(a,b){return b.price-a.price;});
+  return rows;
+}
+function draftText(){
+  return draftLines().map(function(r){
+    return (r.mine?'* ':'') + r.name + ' (' + r.pos + ') -> ' + r.team
+      + ' $' + r.price + ' · our $' + r.ours + ' · '
+      + (r.edge >= 0 ? 'over' : 'under') + ' $' + Math.abs(r.edge).toFixed(1);
+  }).join('\n');
+}
+byId('exportbtn').onclick = function(){
+  var payload = {league: LG.name, exported: new Date().toISOString(),
+                 sold: S.sold, log: (typeof LOG!=='undefined'?LOG:[]),
+                 text: draftText()};
+  var blob = new Blob([JSON.stringify(payload, null, 1)],
+                      {type:'application/json'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (F.key || 'draft') + '_results_'
+    + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  byId('exporthint').textContent = 'Downloaded ' + Object.keys(S.sold).length
+    + ' picks. That file is your permanent record.';
+};
+byId('copybtn').onclick = function(){
+  var txt = draftText();
+  var done = function(){ byId('exporthint').textContent =
+    'Copied ' + Object.keys(S.sold).length + ' picks. Paste into a chat with me.'; };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done, function(){
+      // clipboard blocked (non-secure context etc) — fall back to a selectable box
+      window.prompt('Copy the draft results:', txt);
+    });
+  } else {
+    window.prompt('Copy the draft results:', txt);
+  }
+};
 
 /* manual add form */
 byId('playerlist').innerHTML = DATA.map(p => '<option value="'+p.name+'">').join('');
